@@ -10,7 +10,7 @@ from devito import TimeFunction
 from devito.data.allocators import ExternalAllocator
 
 
-def overthrust_setup(filename, kernel='OT2', tn=4000, src_coordinates=None,
+def overthrust_setup(filename, kernel='OT2', tn=1000, src_coordinates=None,
                      space_order=2, datakey='m0', nbpml=40, dtype=np.float32,
                      **kwargs):
     model = from_hdf5(filename, space_order=space_order, nbpml=nbpml,
@@ -41,7 +41,7 @@ def overthrust_setup(filename, kernel='OT2', tn=4000, src_coordinates=None,
     return solver
 
 
-def overthrust_setup_tti(filename, tn=4000, space_order=2, nbpml=40,
+def overthrust_setup_tti(filename, tn=1000, space_order=2, nbpml=40,
                          **kwargs):
     model = from_hdf5(filename, space_order=space_order, nbpml=nbpml,
                       datakey='m0', dtype=np.float32)
