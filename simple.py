@@ -7,7 +7,7 @@ import numpy as np
 from util import from_hdf5
 
 from devito import TimeFunction
-from devito.data.allocators import ALLOC_MMAP
+from devito.data.allocators import ExternalAllocator
 
 
 def overthrust_setup(filename, kernel='OT2', tn=4000, src_coordinates=None,
@@ -93,8 +93,10 @@ def run(space_order=4, kernel='OT4', nbpml=40, filename='', **kwargs):
 
     dt = solver.model.critical_dt
 
+    numpy_array = np.memmap("/scr01/array.dat", mode='w+',  shape=(solver.geometry.nt,893,893,299), dtype=np.float32)
+
     u = TimeFunction(name='u', grid=grid, time_order=2, space_order=space_order,
-        allocator=ALLOC_MMAP(),
+        allocator=ExternalAllocator(numpy_array),
         initializer=lambda x: None,
         save=solver.geometry.nt)
 
