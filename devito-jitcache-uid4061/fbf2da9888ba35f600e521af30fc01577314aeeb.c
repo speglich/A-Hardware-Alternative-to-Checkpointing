@@ -37,6 +37,7 @@ struct profiler
 struct writter_struct {
     int begin;
     int end;
+    FILE* fdes;
     void* vec;
 } ;
 
@@ -52,6 +53,9 @@ void *Writter(void* arguments){
   struct dataobj *restrict u_vec = (struct dataobj *restrict) args->vec;
 
   float (*restrict u)[u_vec->size[1]][u_vec->size[2]][u_vec->size[3]] __attribute__ ((aligned (64))) = (float (*)[u_vec->size[1]][u_vec->size[2]][u_vec->size[3]]) u_vec->data;
+  size_t u_size = u_vec->size[1]*u_vec->size[2]*u_vec->size[3];
+
+  FILE* f = args->fdes;
 
   int write_begin = args->begin;
   int write_ended = args->end +1;
@@ -71,7 +75,7 @@ void *Writter(void* arguments){
     sem_post(&produced);
 
       for (int i = write_begin; i <= to_write; i++){
-        printf("Olá da thread que escreveu %d...\n", i);
+        fwrite(u[i%3], sizeof(float), u_size, f);
         write_begin++;
       }
 
@@ -103,10 +107,13 @@ int Forward(struct dataobj *restrict damp_vec, struct dataobj *restrict rec_vec,
   pthread_t thread1;
   int  iret1;
 
+  FILE *file = fopen("example.data", "wb");
+
   struct writter_struct args;
   args.begin = time_m;
   args.end = time_M;
   args.vec = (void *) u_vec;
+  args.fdes = file;
 
   sem_init(&mutex, 0, 1);
   sem_init(&produced, 0, 1);
@@ -115,11 +122,6 @@ int Forward(struct dataobj *restrict damp_vec, struct dataobj *restrict rec_vec,
 
   for (int time = time_m, t0 = (time)%(3), t1 = (time + 2)%(3), t2 = (time + 1)%(3); time <= time_M; time += 1, t0 = (time)%(3), t1 = (time + 2)%(3), t2 = (time + 1)%(3))
   {
-
-    sem_wait(&mutex);
-    write_until = time;
-    sem_post(&mutex);
-
     sem_wait(&produced);
     /* Begin section0 */
     START_TIMER(section0)
@@ -218,8 +220,11 @@ int Forward(struct dataobj *restrict damp_vec, struct dataobj *restrict rec_vec,
         }
       }
     }
-
     sem_post(&produced);
+
+    sem_wait(&mutex);
+    write_until = time+1;
+    sem_post(&mutex);
 
     STOP_TIMER(section1,timers)
     /* End section1 */
@@ -283,7 +288,8 @@ int Forward(struct dataobj *restrict damp_vec, struct dataobj *restrict rec_vec,
     STOP_TIMER(section2,timers)
     /* End section2 */
   }
-  pthread_join( thread1, NULL);
+  pthread_join(thread1, NULL);
+  fclose(file);
   return 0;
 }
 /* Backdoor edit at Thu Jun 23 10:11:55 2022*/
@@ -297,4 +303,4 @@ int Forward(struct dataobj *restrict damp_vec, struct dataobj *restrict rec_vec,
 /* Backdoor edit at Thu Jun 23 11:22:53 2022*/
 /* Backdoor edit at Thu Jun 23 11:46:58 2022*/
 /* Backdoor edit at Thu Jun 23 12:10:28 2022*/
-/* Backdoor edit at Thu Jun 23 12:18:03 2022*/ 
+/* Backdoor edit at Thu Jun 23 12:18:03 2022*/
