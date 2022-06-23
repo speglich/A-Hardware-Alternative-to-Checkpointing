@@ -41,10 +41,8 @@ struct writter_struct {
     void* vec;
 } ;
 
-
-long int write_until = 0;
 sem_t mutex;
-sem_t produced;
+int to_write = 0;
 
 void *Writter(void* arguments){
 
@@ -53,36 +51,37 @@ void *Writter(void* arguments){
   struct dataobj *restrict u_vec = (struct dataobj *restrict) args->vec;
 
   float (*restrict u)[u_vec->size[1]][u_vec->size[2]][u_vec->size[3]] __attribute__ ((aligned (64))) = (float (*)[u_vec->size[1]][u_vec->size[2]][u_vec->size[3]]) u_vec->data;
+
   size_t u_size = u_vec->size[1]*u_vec->size[2]*u_vec->size[3];
 
   FILE* f = args->fdes;
 
-  int write_begin = args->begin;
-  int write_ended = args->end +1;
+  int begin = args->begin;
+  int end = args->end + 1;
 
-  sem_wait(&mutex);
-  int to_write = write_until;
-  sem_post(&mutex);
+  int pos_write = begin;
+  int len = 0;
 
-  while(write_begin != write_ended) {
+  while(pos_write != end) {
 
-    sem_wait(&produced);
+    sem_wait(&mutex);
+    len = to_write;
+    sem_post(&mutex);
 
-      sem_wait(&mutex);
-      to_write = write_until;
-      sem_post(&mutex);
+    int end = pos_write + len;
 
-    sem_post(&produced);
+    for(int i = pos_write; i < end; i++) {
+      fwrite(u[i%3], sizeof(float), u_size, f);
+      pos_write++;
+      printf("Thread write %d\n", i);
+    }
 
-      for (int i = write_begin; i <= to_write; i++){
-        fwrite(u[i%3], sizeof(float), u_size, f);
-        write_begin++;
-      }
+    sem_wait(&mutex);
+    to_write -= len;
+    sem_post(&mutex);
 
-    sleep(1);
   }
-
-  printf("Thread saindo..\n");
+  //printf("Thread escreveu %d...\n", begin);
 
   return 0;
 }
@@ -104,25 +103,35 @@ int Forward(struct dataobj *restrict damp_vec, struct dataobj *restrict rec_vec,
   float r8 = 1.0F/(dt*dt);
   float r9 = 1.0F/dt;
 
-  pthread_t thread1;
-  int  iret1;
-
   FILE *file = fopen("example.data", "wb");
-
   struct writter_struct args;
-  args.begin = time_m;
-  args.end = time_M;
   args.vec = (void *) u_vec;
   args.fdes = file;
+  args.begin = time_m;
+  args.end = time_M;
 
   sem_init(&mutex, 0, 1);
-  sem_init(&produced, 0, 1);
 
-  iret1 = pthread_create(&thread1, NULL, Writter, (void *) &args);
+  pthread_t thread;
+  int iret1 = pthread_create(&thread, NULL, Writter, (void *) &args);
 
   for (int time = time_m, t0 = (time)%(3), t1 = (time + 2)%(3), t2 = (time + 1)%(3); time <= time_M; time += 1, t0 = (time)%(3), t1 = (time + 2)%(3), t2 = (time + 1)%(3))
   {
-    sem_wait(&produced);
+    int busy = 1;
+    while(busy)
+    {
+      if(to_write < 2) {
+        sem_wait(&mutex);
+        to_write++;
+        sem_post(&mutex);
+        busy = 0;
+        printf("Already to write %d\n", time);
+      } else {
+        printf("Writter Busy...\n");
+        sleep(1);
+      }
+    }
+
     /* Begin section0 */
     START_TIMER(section0)
     #pragma omp parallel num_threads(nthreads)
@@ -220,12 +229,6 @@ int Forward(struct dataobj *restrict damp_vec, struct dataobj *restrict rec_vec,
         }
       }
     }
-    sem_post(&produced);
-
-    sem_wait(&mutex);
-    write_until = time+1;
-    sem_post(&mutex);
-
     STOP_TIMER(section1,timers)
     /* End section1 */
 
@@ -288,7 +291,7 @@ int Forward(struct dataobj *restrict damp_vec, struct dataobj *restrict rec_vec,
     STOP_TIMER(section2,timers)
     /* End section2 */
   }
-  pthread_join(thread1, NULL);
+  pthread_join(thread, NULL);
   fclose(file);
   return 0;
 }
@@ -304,3 +307,9 @@ int Forward(struct dataobj *restrict damp_vec, struct dataobj *restrict rec_vec,
 /* Backdoor edit at Thu Jun 23 11:46:58 2022*/
 /* Backdoor edit at Thu Jun 23 12:10:28 2022*/
 /* Backdoor edit at Thu Jun 23 12:18:03 2022*/
+/* Backdoor edit at Thu Jun 23 14:52:32 2022*/
+/* Backdoor edit at Thu Jun 23 15:02:23 2022*/
+/* Backdoor edit at Thu Jun 23 15:56:31 2022*/
+/* Backdoor edit at Thu Jun 23 15:58:52 2022*/
+/* Backdoor edit at Thu Jun 23 16:52:49 2022*/
+/* Backdoor edit at Thu Jun 23 18:45:14 2022*/ 
