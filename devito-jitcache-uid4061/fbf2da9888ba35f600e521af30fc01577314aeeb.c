@@ -10,6 +10,8 @@
 #include "xmmintrin.h"
 #include "pmmintrin.h"
 #include "omp.h"
+#include "pthread.h"
+#include "semaphore.h"
 #include "stdio.h"
 #include "unistd.h"
 
@@ -32,6 +34,55 @@ struct profiler
 } ;
 
 
+struct writter_struct {
+    int begin;
+    int end;
+    void* vec;
+} ;
+
+
+long int write_until = 0;
+sem_t mutex;
+sem_t produced;
+
+void *Writter(void* arguments){
+
+  struct writter_struct *args = (struct writter_struct *) arguments;
+
+  struct dataobj *restrict u_vec = (struct dataobj *restrict) args->vec;
+
+  float (*restrict u)[u_vec->size[1]][u_vec->size[2]][u_vec->size[3]] __attribute__ ((aligned (64))) = (float (*)[u_vec->size[1]][u_vec->size[2]][u_vec->size[3]]) u_vec->data;
+
+  int write_begin = args->begin;
+  int write_ended = args->end +1;
+
+  sem_wait(&mutex);
+  int to_write = write_until;
+  sem_post(&mutex);
+
+  while(write_begin != write_ended) {
+
+    sem_wait(&produced);
+
+      sem_wait(&mutex);
+      to_write = write_until;
+      sem_post(&mutex);
+
+    sem_post(&produced);
+
+      for (int i = write_begin; i <= to_write; i++){
+        printf("Olá da thread que escreveu %d...\n", i);
+        write_begin++;
+      }
+
+    sleep(1);
+  }
+
+  printf("Thread saindo..\n");
+
+  return 0;
+}
+
 int Forward(struct dataobj *restrict damp_vec, struct dataobj *restrict rec_vec, struct dataobj *restrict rec_coords_vec, struct dataobj *restrict src_vec, struct dataobj *restrict src_coords_vec, struct dataobj *restrict u_vec, struct dataobj *restrict vp_vec, const int x_M, const int x_m, const int y_M, const int y_m, const int z_M, const int z_m, const float dt, const float o_x, const float o_y, const float o_z, const int p_rec_M, const int p_rec_m, const int p_src_M, const int p_src_m, const int time_M, const int time_m, const int x0_blk0_size, const int y0_blk0_size, const int nthreads, const int nthreads_nonaffine, struct profiler * timers)
 {
   float (*restrict damp)[damp_vec->size[1]][damp_vec->size[2]] __attribute__ ((aligned (64))) = (float (*)[damp_vec->size[1]][damp_vec->size[2]]) damp_vec->data;
@@ -49,14 +100,27 @@ int Forward(struct dataobj *restrict damp_vec, struct dataobj *restrict rec_vec,
   float r8 = 1.0F/(dt*dt);
   float r9 = 1.0F/dt;
 
-  FILE *f = fopen("example.data", "wb");
+  pthread_t thread1;
+  int  iret1;
 
-  size_t u_size = u_vec->size[1]*u_vec->size[2]*u_vec->size[3];
+  struct writter_struct args;
+  args.begin = time_m;
+  args.end = time_M;
+  args.vec = (void *) u_vec;
+
+  sem_init(&mutex, 0, 1);
+  sem_init(&produced, 0, 1);
+
+  iret1 = pthread_create(&thread1, NULL, Writter, (void *) &args);
 
   for (int time = time_m, t0 = (time)%(3), t1 = (time + 2)%(3), t2 = (time + 1)%(3); time <= time_M; time += 1, t0 = (time)%(3), t1 = (time + 2)%(3), t2 = (time + 1)%(3))
   {
-    fwrite(u[t0], sizeof(float), u_size, f);
 
+    sem_wait(&mutex);
+    write_until = time;
+    sem_post(&mutex);
+
+    sem_wait(&produced);
     /* Begin section0 */
     START_TIMER(section0)
     #pragma omp parallel num_threads(nthreads)
@@ -81,7 +145,6 @@ int Forward(struct dataobj *restrict damp_vec, struct dataobj *restrict rec_vec,
         }
       }
     }
-
     STOP_TIMER(section0,timers)
     /* End section0 */
 
@@ -155,6 +218,9 @@ int Forward(struct dataobj *restrict damp_vec, struct dataobj *restrict rec_vec,
         }
       }
     }
+
+    sem_post(&produced);
+
     STOP_TIMER(section1,timers)
     /* End section1 */
 
@@ -217,28 +283,18 @@ int Forward(struct dataobj *restrict damp_vec, struct dataobj *restrict rec_vec,
     STOP_TIMER(section2,timers)
     /* End section2 */
   }
-
-  fclose(f);
-
+  pthread_join( thread1, NULL);
   return 0;
 }
-/* Backdoor edit at Tue Jun 21 11:58:56 2022*/
-/* Backdoor edit at Tue Jun 21 11:59:24 2022*/
-/* Backdoor edit at Tue Jun 21 12:00:21 2022*/
-/* Backdoor edit at Tue Jun 21 16:48:26 2022*/
-/* Backdoor edit at Tue Jun 21 17:00:28 2022*/
-/* Backdoor edit at Tue Jun 21 17:00:46 2022*/
-/* Backdoor edit at Tue Jun 21 17:02:00 2022*/
-/* Backdoor edit at Tue Jun 21 17:28:11 2022*/
-/* Backdoor edit at Tue Jun 21 17:32:28 2022*/
-/* Backdoor edit at Tue Jun 21 17:44:30 2022*/
-/* Backdoor edit at Tue Jun 21 17:50:02 2022*/
-/* Backdoor edit at Tue Jun 21 18:09:03 2022*/
-/* Backdoor edit at Tue Jun 21 18:22:38 2022*/
-/* Backdoor edit at Tue Jun 21 18:24:31 2022*/
-/* Backdoor edit at Tue Jun 21 18:26:29 2022*/
-/* Backdoor edit at Tue Jun 21 19:58:55 2022*/
-/* Backdoor edit at Tue Jun 21 20:01:48 2022*/
-/* Backdoor edit at Tue Jun 21 20:02:36 2022*/
-/* Backdoor edit at Tue Jun 21 20:04:43 2022*/
-/* Backdoor edit at Tue Jun 21 20:10:22 2022*/
+/* Backdoor edit at Thu Jun 23 10:11:55 2022*/
+/* Backdoor edit at Thu Jun 23 10:17:19 2022*/
+/* Backdoor edit at Thu Jun 23 10:17:53 2022*/
+/* Backdoor edit at Thu Jun 23 10:35:24 2022*/
+/* Backdoor edit at Thu Jun 23 10:36:32 2022*/
+/* Backdoor edit at Thu Jun 23 11:08:32 2022*/
+/* Backdoor edit at Thu Jun 23 11:11:45 2022*/
+/* Backdoor edit at Thu Jun 23 11:12:40 2022*/
+/* Backdoor edit at Thu Jun 23 11:22:53 2022*/
+/* Backdoor edit at Thu Jun 23 11:46:58 2022*/
+/* Backdoor edit at Thu Jun 23 12:10:28 2022*/
+/* Backdoor edit at Thu Jun 23 12:18:03 2022*/ 
