@@ -14,13 +14,14 @@
 #include "semaphore.h"
 #include "stdio.h"
 #include "unistd.h"
+#include "fcntl.h"
 
 struct dataobj
 {
   void *restrict data;
-  unsigned long * size;
-  unsigned long * npsize;
-  unsigned long * dsize;
+  int * size;
+  int * npsize;
+  int * dsize;
   int * hsize;
   int * hofs;
   int * oofs;
@@ -37,7 +38,7 @@ struct profiler
 struct writter_struct {
     int begin;
     int end;
-    FILE* fdes;
+    int fdes;
     void* vec;
 } ;
 
@@ -52,9 +53,9 @@ void *Writter(void* arguments){
 
   float (*restrict u)[u_vec->size[1]][u_vec->size[2]][u_vec->size[3]] __attribute__ ((aligned (64))) = (float (*)[u_vec->size[1]][u_vec->size[2]][u_vec->size[3]]) u_vec->data;
 
-  size_t u_size = u_vec->size[1]*u_vec->size[2]*u_vec->size[3];
+  unsigned long u_size = u_vec->size[1]*u_vec->size[2]*u_vec->size[3];
 
-  FILE* f = args->fdes;
+  int f = args->fdes;
 
   int begin = args->begin;
   int end = args->end + 1;
@@ -71,7 +72,7 @@ void *Writter(void* arguments){
     int end = pos_write + len;
 
     for(int i = pos_write; i < end; i++) {
-      fwrite(u[i%3], sizeof(float), u_size, f);
+      write(f, u[i%3], sizeof(float)*u_size);
       pos_write++;
       printf("Thread write %d\n", i);
     }
@@ -86,7 +87,7 @@ void *Writter(void* arguments){
   return 0;
 }
 
-int Forward(struct dataobj *restrict damp_vec, struct dataobj *restrict rec_vec, struct dataobj *restrict rec_coords_vec, struct dataobj *restrict src_vec, struct dataobj *restrict src_coords_vec, struct dataobj *restrict u_vec, struct dataobj *restrict vp_vec, const int x_M, const int x_m, const int y_M, const int y_m, const int z_M, const int z_m, const float dt, const float o_x, const float o_y, const float o_z, const int p_rec_M, const int p_rec_m, const int p_src_M, const int p_src_m, const int time_M, const int time_m, const int x0_blk0_size, const int y0_blk0_size, const int nthreads, const int nthreads_nonaffine, struct profiler * timers)
+int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, const float o_y, const float o_z, struct dataobj *restrict rec_vec, struct dataobj *restrict rec_coords_vec, struct dataobj *restrict src_vec, struct dataobj *restrict src_coords_vec, struct dataobj *restrict u_vec, struct dataobj *restrict vp_vec, const int x_M, const int x_m, const int y_M, const int y_m, const int z_M, const int z_m, const int p_rec_M, const int p_rec_m, const int p_src_M, const int p_src_m, const int time_M, const int time_m, const int x0_blk0_size, const int y0_blk0_size, const int nthreads, const int nthreads_nonaffine, struct profiler * timers)
 {
   float (*restrict damp)[damp_vec->size[1]][damp_vec->size[2]] __attribute__ ((aligned (64))) = (float (*)[damp_vec->size[1]][damp_vec->size[2]]) damp_vec->data;
   float (*restrict rec)[rec_vec->size[1]] __attribute__ ((aligned (64))) = (float (*)[rec_vec->size[1]]) rec_vec->data;
@@ -100,10 +101,18 @@ int Forward(struct dataobj *restrict damp_vec, struct dataobj *restrict rec_vec,
   _MM_SET_DENORMALS_ZERO_MODE(_MM_DENORMALS_ZERO_ON);
   _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
 
-  float r8 = 1.0F/(dt*dt);
-  float r9 = 1.0F/dt;
+  float r0 = 1.0F/(dt*dt);
+  float r1 = 1.0F/dt;
 
-  FILE *file = fopen("/scr01/example.data", "wb");
+  int file;
+
+  printf("U: %d %d %d\n",  u_vec->size[0],  u_vec->size[1],  u_vec->size[2]);
+
+  if ((file = open("/scr01/test.data", O_WRONLY | O_CREAT | O_TRUNC,
+      S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) == -1)
+  {
+      perror("Cannot open output file\n"); exit(1);
+  }
   struct writter_struct args;
   args.vec = (void *) u_vec;
   args.fdes = file;
@@ -125,10 +134,10 @@ int Forward(struct dataobj *restrict damp_vec, struct dataobj *restrict rec_vec,
         to_write++;
         sem_post(&mutex);
         busy = 0;
-        printf("Already to write %d\n", time);
+        //printf("Already to write %d\n", time);
       } else {
-        printf("Writter Busy...\n");
-        sleep(1);
+        //printf("Writter Busy...\n");
+        sleep(0.1);
       }
     }
 
@@ -149,7 +158,7 @@ int Forward(struct dataobj *restrict damp_vec, struct dataobj *restrict rec_vec,
               for (int z = z_m; z <= z_M; z += 1)
               {
                 float r10 = 1.0F/(vp[x + 6][y + 6][z + 6]*vp[x + 6][y + 6][z + 6]);
-                u[t2][x + 6][y + 6][z + 6] = (r9*damp[x + 1][y + 1][z + 1]*u[t0][x + 6][y + 6][z + 6] + r10*(-r8*(-2.0F*u[t0][x + 6][y + 6][z + 6]) - r8*u[t1][x + 6][y + 6][z + 6]) + 1.77777773e-5F*(u[t0][x + 3][y + 6][z + 6] + u[t0][x + 6][y + 3][z + 6] + u[t0][x + 6][y + 6][z + 3] + u[t0][x + 6][y + 6][z + 9] + u[t0][x + 6][y + 9][z + 6] + u[t0][x + 9][y + 6][z + 6]) + 2.39999994e-4F*(-u[t0][x + 4][y + 6][z + 6] - u[t0][x + 6][y + 4][z + 6] - u[t0][x + 6][y + 6][z + 4] - u[t0][x + 6][y + 6][z + 8] - u[t0][x + 6][y + 8][z + 6] - u[t0][x + 8][y + 6][z + 6]) + 2.39999994e-3F*(u[t0][x + 5][y + 6][z + 6] + u[t0][x + 6][y + 5][z + 6] + u[t0][x + 6][y + 6][z + 5] + u[t0][x + 6][y + 6][z + 7] + u[t0][x + 6][y + 7][z + 6] + u[t0][x + 7][y + 6][z + 6]) - 1.30666663e-2F*u[t0][x + 6][y + 6][z + 6])/(r8*r10 + r9*damp[x + 1][y + 1][z + 1]);
+                u[t2][x + 6][y + 6][z + 6] = (r1*damp[x + 1][y + 1][z + 1]*u[t0][x + 6][y + 6][z + 6] + r10*(-r0*(-2.0F*u[t0][x + 6][y + 6][z + 6]) - r0*u[t1][x + 6][y + 6][z + 6]) + 1.77777773e-5F*(u[t0][x + 3][y + 6][z + 6] + u[t0][x + 6][y + 3][z + 6] + u[t0][x + 6][y + 6][z + 3] + u[t0][x + 6][y + 6][z + 9] + u[t0][x + 6][y + 9][z + 6] + u[t0][x + 9][y + 6][z + 6]) + 2.39999994e-4F*(-u[t0][x + 4][y + 6][z + 6] - u[t0][x + 6][y + 4][z + 6] - u[t0][x + 6][y + 6][z + 4] - u[t0][x + 6][y + 6][z + 8] - u[t0][x + 6][y + 8][z + 6] - u[t0][x + 8][y + 6][z + 6]) + 2.39999994e-3F*(u[t0][x + 5][y + 6][z + 6] + u[t0][x + 6][y + 5][z + 6] + u[t0][x + 6][y + 6][z + 5] + u[t0][x + 6][y + 6][z + 7] + u[t0][x + 6][y + 7][z + 6] + u[t0][x + 7][y + 6][z + 6]) - 1.30666663e-2F*u[t0][x + 6][y + 6][z + 6])/(r0*r10 + r1*damp[x + 1][y + 1][z + 1]);
               }
             }
           }
@@ -181,51 +190,51 @@ int Forward(struct dataobj *restrict damp_vec, struct dataobj *restrict rec_vec,
         float pz = (float)(posz - 2.5e+1F*(int)(floor(4.0e-2F*posz)));
         if (ii_src_0 >= x_m - 1 && ii_src_1 >= y_m - 1 && ii_src_2 >= z_m - 1 && ii_src_0 <= x_M + 1 && ii_src_1 <= y_M + 1 && ii_src_2 <= z_M + 1)
         {
-          float r0 = (dt*dt)*(vp[ii_src_0 + 6][ii_src_1 + 6][ii_src_2 + 6]*vp[ii_src_0 + 6][ii_src_1 + 6][ii_src_2 + 6])*(-6.4e-5F*px*py*pz + 1.6e-3F*px*py + 1.6e-3F*px*pz - 4.0e-2F*px + 1.6e-3F*py*pz - 4.0e-2F*py - 4.0e-2F*pz + 1)*src[time][p_src];
+          float r2 = (dt*dt)*(vp[ii_src_0 + 6][ii_src_1 + 6][ii_src_2 + 6]*vp[ii_src_0 + 6][ii_src_1 + 6][ii_src_2 + 6])*(-6.4e-5F*px*py*pz + 1.6e-3F*px*py + 1.6e-3F*px*pz - 4.0e-2F*px + 1.6e-3F*py*pz - 4.0e-2F*py - 4.0e-2F*pz + 1)*src[time][p_src];
           #pragma omp atomic update
-          u[t2][ii_src_0 + 6][ii_src_1 + 6][ii_src_2 + 6] += r0;
+          u[t2][ii_src_0 + 6][ii_src_1 + 6][ii_src_2 + 6] += r2;
         }
         if (ii_src_0 >= x_m - 1 && ii_src_1 >= y_m - 1 && ii_src_3 >= z_m - 1 && ii_src_0 <= x_M + 1 && ii_src_1 <= y_M + 1 && ii_src_3 <= z_M + 1)
         {
-          float r1 = (dt*dt)*(vp[ii_src_0 + 6][ii_src_1 + 6][ii_src_3 + 6]*vp[ii_src_0 + 6][ii_src_1 + 6][ii_src_3 + 6])*(6.4e-5F*px*py*pz - 1.6e-3F*px*pz - 1.6e-3F*py*pz + 4.0e-2F*pz)*src[time][p_src];
+          float r3 = (dt*dt)*(vp[ii_src_0 + 6][ii_src_1 + 6][ii_src_3 + 6]*vp[ii_src_0 + 6][ii_src_1 + 6][ii_src_3 + 6])*(6.4e-5F*px*py*pz - 1.6e-3F*px*pz - 1.6e-3F*py*pz + 4.0e-2F*pz)*src[time][p_src];
           #pragma omp atomic update
-          u[t2][ii_src_0 + 6][ii_src_1 + 6][ii_src_3 + 6] += r1;
+          u[t2][ii_src_0 + 6][ii_src_1 + 6][ii_src_3 + 6] += r3;
         }
         if (ii_src_0 >= x_m - 1 && ii_src_2 >= z_m - 1 && ii_src_4 >= y_m - 1 && ii_src_0 <= x_M + 1 && ii_src_2 <= z_M + 1 && ii_src_4 <= y_M + 1)
         {
-          float r2 = (dt*dt)*(vp[ii_src_0 + 6][ii_src_4 + 6][ii_src_2 + 6]*vp[ii_src_0 + 6][ii_src_4 + 6][ii_src_2 + 6])*(6.4e-5F*px*py*pz - 1.6e-3F*px*py - 1.6e-3F*py*pz + 4.0e-2F*py)*src[time][p_src];
+          float r4 = (dt*dt)*(vp[ii_src_0 + 6][ii_src_4 + 6][ii_src_2 + 6]*vp[ii_src_0 + 6][ii_src_4 + 6][ii_src_2 + 6])*(6.4e-5F*px*py*pz - 1.6e-3F*px*py - 1.6e-3F*py*pz + 4.0e-2F*py)*src[time][p_src];
           #pragma omp atomic update
-          u[t2][ii_src_0 + 6][ii_src_4 + 6][ii_src_2 + 6] += r2;
+          u[t2][ii_src_0 + 6][ii_src_4 + 6][ii_src_2 + 6] += r4;
         }
         if (ii_src_0 >= x_m - 1 && ii_src_3 >= z_m - 1 && ii_src_4 >= y_m - 1 && ii_src_0 <= x_M + 1 && ii_src_3 <= z_M + 1 && ii_src_4 <= y_M + 1)
         {
-          float r3 = (dt*dt)*(vp[ii_src_0 + 6][ii_src_4 + 6][ii_src_3 + 6]*vp[ii_src_0 + 6][ii_src_4 + 6][ii_src_3 + 6])*(-6.4e-5F*px*py*pz + 1.6e-3F*py*pz)*src[time][p_src];
+          float r5 = (dt*dt)*(vp[ii_src_0 + 6][ii_src_4 + 6][ii_src_3 + 6]*vp[ii_src_0 + 6][ii_src_4 + 6][ii_src_3 + 6])*(-6.4e-5F*px*py*pz + 1.6e-3F*py*pz)*src[time][p_src];
           #pragma omp atomic update
-          u[t2][ii_src_0 + 6][ii_src_4 + 6][ii_src_3 + 6] += r3;
+          u[t2][ii_src_0 + 6][ii_src_4 + 6][ii_src_3 + 6] += r5;
         }
         if (ii_src_1 >= y_m - 1 && ii_src_2 >= z_m - 1 && ii_src_5 >= x_m - 1 && ii_src_1 <= y_M + 1 && ii_src_2 <= z_M + 1 && ii_src_5 <= x_M + 1)
         {
-          float r4 = (dt*dt)*(vp[ii_src_5 + 6][ii_src_1 + 6][ii_src_2 + 6]*vp[ii_src_5 + 6][ii_src_1 + 6][ii_src_2 + 6])*(6.4e-5F*px*py*pz - 1.6e-3F*px*py - 1.6e-3F*px*pz + 4.0e-2F*px)*src[time][p_src];
+          float r6 = (dt*dt)*(vp[ii_src_5 + 6][ii_src_1 + 6][ii_src_2 + 6]*vp[ii_src_5 + 6][ii_src_1 + 6][ii_src_2 + 6])*(6.4e-5F*px*py*pz - 1.6e-3F*px*py - 1.6e-3F*px*pz + 4.0e-2F*px)*src[time][p_src];
           #pragma omp atomic update
-          u[t2][ii_src_5 + 6][ii_src_1 + 6][ii_src_2 + 6] += r4;
+          u[t2][ii_src_5 + 6][ii_src_1 + 6][ii_src_2 + 6] += r6;
         }
         if (ii_src_1 >= y_m - 1 && ii_src_3 >= z_m - 1 && ii_src_5 >= x_m - 1 && ii_src_1 <= y_M + 1 && ii_src_3 <= z_M + 1 && ii_src_5 <= x_M + 1)
         {
-          float r5 = (dt*dt)*(vp[ii_src_5 + 6][ii_src_1 + 6][ii_src_3 + 6]*vp[ii_src_5 + 6][ii_src_1 + 6][ii_src_3 + 6])*(-6.4e-5F*px*py*pz + 1.6e-3F*px*pz)*src[time][p_src];
+          float r7 = (dt*dt)*(vp[ii_src_5 + 6][ii_src_1 + 6][ii_src_3 + 6]*vp[ii_src_5 + 6][ii_src_1 + 6][ii_src_3 + 6])*(-6.4e-5F*px*py*pz + 1.6e-3F*px*pz)*src[time][p_src];
           #pragma omp atomic update
-          u[t2][ii_src_5 + 6][ii_src_1 + 6][ii_src_3 + 6] += r5;
+          u[t2][ii_src_5 + 6][ii_src_1 + 6][ii_src_3 + 6] += r7;
         }
         if (ii_src_2 >= z_m - 1 && ii_src_4 >= y_m - 1 && ii_src_5 >= x_m - 1 && ii_src_2 <= z_M + 1 && ii_src_4 <= y_M + 1 && ii_src_5 <= x_M + 1)
         {
-          float r6 = (dt*dt)*(vp[ii_src_5 + 6][ii_src_4 + 6][ii_src_2 + 6]*vp[ii_src_5 + 6][ii_src_4 + 6][ii_src_2 + 6])*(-6.4e-5F*px*py*pz + 1.6e-3F*px*py)*src[time][p_src];
+          float r8 = (dt*dt)*(vp[ii_src_5 + 6][ii_src_4 + 6][ii_src_2 + 6]*vp[ii_src_5 + 6][ii_src_4 + 6][ii_src_2 + 6])*(-6.4e-5F*px*py*pz + 1.6e-3F*px*py)*src[time][p_src];
           #pragma omp atomic update
-          u[t2][ii_src_5 + 6][ii_src_4 + 6][ii_src_2 + 6] += r6;
+          u[t2][ii_src_5 + 6][ii_src_4 + 6][ii_src_2 + 6] += r8;
         }
         if (ii_src_3 >= z_m - 1 && ii_src_4 >= y_m - 1 && ii_src_5 >= x_m - 1 && ii_src_3 <= z_M + 1 && ii_src_4 <= y_M + 1 && ii_src_5 <= x_M + 1)
         {
-          float r7 = 6.4e-5F*px*py*pz*(dt*dt)*(vp[ii_src_5 + 6][ii_src_4 + 6][ii_src_3 + 6]*vp[ii_src_5 + 6][ii_src_4 + 6][ii_src_3 + 6])*src[time][p_src];
+          float r9 = 6.4e-5F*px*py*pz*(dt*dt)*(vp[ii_src_5 + 6][ii_src_4 + 6][ii_src_3 + 6]*vp[ii_src_5 + 6][ii_src_4 + 6][ii_src_3 + 6])*src[time][p_src];
           #pragma omp atomic update
-          u[t2][ii_src_5 + 6][ii_src_4 + 6][ii_src_3 + 6] += r7;
+          u[t2][ii_src_5 + 6][ii_src_4 + 6][ii_src_3 + 6] += r9;
         }
       }
     }
@@ -292,24 +301,25 @@ int Forward(struct dataobj *restrict damp_vec, struct dataobj *restrict rec_vec,
     /* End section2 */
   }
   pthread_join(thread, NULL);
-  fclose(file);
   return 0;
 }
-/* Backdoor edit at Thu Jun 23 10:11:55 2022*/
-/* Backdoor edit at Thu Jun 23 10:17:19 2022*/
-/* Backdoor edit at Thu Jun 23 10:17:53 2022*/
-/* Backdoor edit at Thu Jun 23 10:35:24 2022*/
-/* Backdoor edit at Thu Jun 23 10:36:32 2022*/
-/* Backdoor edit at Thu Jun 23 11:08:32 2022*/
-/* Backdoor edit at Thu Jun 23 11:11:45 2022*/
-/* Backdoor edit at Thu Jun 23 11:12:40 2022*/
-/* Backdoor edit at Thu Jun 23 11:22:53 2022*/
-/* Backdoor edit at Thu Jun 23 11:46:58 2022*/
-/* Backdoor edit at Thu Jun 23 12:10:28 2022*/
-/* Backdoor edit at Thu Jun 23 12:18:03 2022*/
-/* Backdoor edit at Thu Jun 23 14:52:32 2022*/
-/* Backdoor edit at Thu Jun 23 15:02:23 2022*/
-/* Backdoor edit at Thu Jun 23 15:56:31 2022*/
-/* Backdoor edit at Thu Jun 23 15:58:52 2022*/
-/* Backdoor edit at Thu Jun 23 16:52:49 2022*/
-/* Backdoor edit at Thu Jun 23 18:45:14 2022*/
+/* Backdoor edit at Wed Jul 13 18:03:12 2022*/
+/* Backdoor edit at Wed Jul 13 18:05:43 2022*/
+/* Backdoor edit at Wed Jul 13 18:08:34 2022*/
+/* Backdoor edit at Wed Jul 13 18:11:13 2022*/
+/* Backdoor edit at Wed Jul 13 18:13:04 2022*/
+/* Backdoor edit at Wed Jul 13 18:13:05 2022*/
+/* Backdoor edit at Wed Jul 13 18:13:05 2022*/
+/* Backdoor edit at Wed Jul 13 18:15:18 2022*/
+/* Backdoor edit at Wed Jul 13 18:16:51 2022*/
+/* Backdoor edit at Wed Jul 13 18:16:51 2022*/
+/* Backdoor edit at Wed Jul 13 18:16:53 2022*/
+/* Backdoor edit at Wed Jul 13 18:36:48 2022*/
+/* Backdoor edit at Wed Jul 13 18:36:49 2022*/
+/* Backdoor edit at Wed Jul 13 18:36:56 2022*/
+/* Backdoor edit at Wed Jul 13 18:44:12 2022*/ 
+/* Backdoor edit at Wed Jul 13 18:44:13 2022*/ 
+/* Backdoor edit at Wed Jul 13 18:44:13 2022*/ 
+/* Backdoor edit at Wed Jul 13 19:03:57 2022*/ 
+/* Backdoor edit at Wed Jul 13 19:04:11 2022*/ 
+/* Backdoor edit at Wed Jul 13 19:04:44 2022*/ 
