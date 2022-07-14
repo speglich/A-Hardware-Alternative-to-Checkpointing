@@ -9,6 +9,23 @@ from util import from_hdf5
 from devito import TimeFunction
 from devito.data.allocators import ExternalAllocator
 
+from devito import configuration, compiler_registry
+from devito.arch.compiler import GNUCompiler
+
+class MyOwnCompiler(GNUCompiler):
+    def __init__(self, *args, **kwargs):
+        super(MyOwnCompiler, self).__init__(*args, **kwargs)
+        self.cflags.append("-lrt")
+
+
+### Make sure Devito is aware of this new Compiler class
+compiler_registry['mycompiler'] = MyOwnCompiler
+configuration.add("compiler", "custom", list(compiler_registry), callback=lambda i: compiler_registry[i]())
+
+
+### Then, what remains to be done is asking Devito to use MyOwnCompiler
+
+configuration['compiler'] = 'mycompiler'
 
 def overthrust_setup(filename, kernel='OT2', tn=1000, src_coordinates=None,
                      space_order=2, datakey='m0', nbpml=40, dtype=np.float32,

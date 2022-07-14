@@ -10,11 +10,16 @@
 #include "xmmintrin.h"
 #include "pmmintrin.h"
 #include "omp.h"
-#include "pthread.h"
-#include "semaphore.h"
-#include "stdio.h"
+
+#include "sys/types.h"
 #include "unistd.h"
+#include "sys/stat.h"
 #include "fcntl.h"
+#include "errno.h"
+#include "stdlib.h"
+#include "aio.h"
+#include "stdio.h"
+#include "string.h"
 
 struct dataobj
 {
@@ -35,58 +40,6 @@ struct profiler
 } ;
 
 
-struct writter_struct {
-    int begin;
-    int end;
-    int fdes;
-    void* vec;
-} ;
-
-sem_t mutex;
-int to_write = 0;
-
-void *Writter(void* arguments){
-
-  struct writter_struct *args = (struct writter_struct *) arguments;
-
-  struct dataobj *restrict u_vec = (struct dataobj *restrict) args->vec;
-
-  float (*restrict u)[u_vec->size[1]][u_vec->size[2]][u_vec->size[3]] __attribute__ ((aligned (64))) = (float (*)[u_vec->size[1]][u_vec->size[2]][u_vec->size[3]]) u_vec->data;
-
-  unsigned long u_size = u_vec->size[1]*u_vec->size[2]*u_vec->size[3];
-
-  int f = args->fdes;
-
-  int begin = args->begin;
-  int end = args->end + 1;
-
-  int pos_write = begin;
-  int len = 0;
-
-  while(pos_write != end) {
-
-    sem_wait(&mutex);
-    len = to_write;
-    sem_post(&mutex);
-
-    int end = pos_write + len;
-
-    for(int i = pos_write; i < end; i++) {
-      write(f, u[i%3], sizeof(float)*u_size);
-      pos_write++;
-      printf("Thread write %d\n", i);
-    }
-
-    sem_wait(&mutex);
-    to_write -= len;
-    sem_post(&mutex);
-
-  }
-  //printf("Thread escreveu %d...\n", begin);
-
-  return 0;
-}
-
 int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, const float o_y, const float o_z, struct dataobj *restrict rec_vec, struct dataobj *restrict rec_coords_vec, struct dataobj *restrict src_vec, struct dataobj *restrict src_coords_vec, struct dataobj *restrict u_vec, struct dataobj *restrict vp_vec, const int x_M, const int x_m, const int y_M, const int y_m, const int z_M, const int z_m, const int p_rec_M, const int p_rec_m, const int p_src_M, const int p_src_m, const int time_M, const int time_m, const int x0_blk0_size, const int y0_blk0_size, const int nthreads, const int nthreads_nonaffine, struct profiler * timers)
 {
   float (*restrict damp)[damp_vec->size[1]][damp_vec->size[2]] __attribute__ ((aligned (64))) = (float (*)[damp_vec->size[1]][damp_vec->size[2]]) damp_vec->data;
@@ -106,39 +59,26 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
 
   int file;
 
-  printf("U: %d %d %d\n",  u_vec->size[0],  u_vec->size[1],  u_vec->size[2]);
-
   if ((file = open("/scr01/test.data", O_WRONLY | O_CREAT | O_TRUNC,
       S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) == -1)
   {
       perror("Cannot open output file\n"); exit(1);
   }
-  struct writter_struct args;
-  args.vec = (void *) u_vec;
-  args.fdes = file;
-  args.begin = time_m;
-  args.end = time_M;
-
-  sem_init(&mutex, 0, 1);
-
-  pthread_t thread;
-  int iret1 = pthread_create(&thread, NULL, Writter, (void *) &args);
 
   for (int time = time_m, t0 = (time)%(3), t1 = (time + 2)%(3), t2 = (time + 1)%(3); time <= time_M; time += 1, t0 = (time)%(3), t1 = (time + 2)%(3), t2 = (time + 1)%(3))
   {
-    int busy = 1;
-    while(busy)
-    {
-      if(to_write < 2) {
-        sem_wait(&mutex);
-        to_write++;
-        sem_post(&mutex);
-        busy = 0;
-        //printf("Already to write %d\n", time);
-      } else {
-        //printf("Writter Busy...\n");
-        sleep(0.1);
-      }
+    struct aiocb aiocb;
+    memset(&aiocb, 0, sizeof(struct aiocb));
+
+    aiocb.aio_fildes = file;
+    aiocb.aio_nbytes = u_vec->size[1]*u_vec->size[2]*u_vec->size[3] * sizeof(float);
+    aiocb.aio_offset = u_vec->size[1]*u_vec->size[2]*u_vec->size[3] * sizeof(float) * time;
+    aiocb.aio_buf = u[t0];
+
+    if (aio_write(&aiocb) == -1) {
+      printf(" Error at aio_write(): %s\n", strerror(errno));
+      close(file);
+      exit(2);
     }
 
     /* Begin section0 */
@@ -299,27 +239,45 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
     }
     STOP_TIMER(section2,timers)
     /* End section2 */
+
+    /* Wait until completion */
+    while (aio_error (&aiocb) == EINPROGRESS);
+
+    int err = aio_error(&aiocb);
+    int ret = aio_return(&aiocb);
+
+    if (err != 0) {
+      printf (" Error at aio_error() : %s\n", strerror (err));
+      close (file);
+      exit(2);
+    }
+
+    if (ret != aiocb.aio_nbytes) {
+      printf(" Error at aio_return()\n");
+      close(file);
+      exit(2);
+    }
   }
-  pthread_join(thread, NULL);
+  close (file);
   return 0;
 }
-/* Backdoor edit at Wed Jul 13 18:03:12 2022*/
-/* Backdoor edit at Wed Jul 13 18:05:43 2022*/
-/* Backdoor edit at Wed Jul 13 18:08:34 2022*/
-/* Backdoor edit at Wed Jul 13 18:11:13 2022*/
-/* Backdoor edit at Wed Jul 13 18:13:04 2022*/
-/* Backdoor edit at Wed Jul 13 18:13:05 2022*/
-/* Backdoor edit at Wed Jul 13 18:13:05 2022*/
-/* Backdoor edit at Wed Jul 13 18:15:18 2022*/
-/* Backdoor edit at Wed Jul 13 18:16:51 2022*/
-/* Backdoor edit at Wed Jul 13 18:16:51 2022*/
-/* Backdoor edit at Wed Jul 13 18:16:53 2022*/
-/* Backdoor edit at Wed Jul 13 18:36:48 2022*/
-/* Backdoor edit at Wed Jul 13 18:36:49 2022*/
-/* Backdoor edit at Wed Jul 13 18:36:56 2022*/
-/* Backdoor edit at Wed Jul 13 18:44:12 2022*/ 
-/* Backdoor edit at Wed Jul 13 18:44:13 2022*/ 
-/* Backdoor edit at Wed Jul 13 18:44:13 2022*/ 
-/* Backdoor edit at Wed Jul 13 19:03:57 2022*/ 
-/* Backdoor edit at Wed Jul 13 19:04:11 2022*/ 
-/* Backdoor edit at Wed Jul 13 19:04:44 2022*/ 
+/* Backdoor edit at Thu Jul 14 11:11:54 2022*/
+/* Backdoor edit at Thu Jul 14 11:12:02 2022*/
+/* Backdoor edit at Thu Jul 14 11:12:10 2022*/
+/* Backdoor edit at Thu Jul 14 11:18:37 2022*/
+/* Backdoor edit at Thu Jul 14 11:25:24 2022*/
+/* Backdoor edit at Thu Jul 14 11:53:08 2022*/
+/* Backdoor edit at Thu Jul 14 11:56:24 2022*/
+/* Backdoor edit at Thu Jul 14 14:12:42 2022*/ 
+/* Backdoor edit at Thu Jul 14 14:39:58 2022*/ 
+/* Backdoor edit at Thu Jul 14 14:39:59 2022*/ 
+/* Backdoor edit at Thu Jul 14 14:40:00 2022*/ 
+/* Backdoor edit at Thu Jul 14 14:57:42 2022*/ 
+/* Backdoor edit at Thu Jul 14 14:58:44 2022*/ 
+/* Backdoor edit at Thu Jul 14 14:59:16 2022*/ 
+/* Backdoor edit at Thu Jul 14 15:17:00 2022*/ 
+/* Backdoor edit at Thu Jul 14 15:17:13 2022*/ 
+/* Backdoor edit at Thu Jul 14 15:17:31 2022*/ 
+/* Backdoor edit at Thu Jul 14 15:36:43 2022*/ 
+/* Backdoor edit at Thu Jul 14 15:37:26 2022*/ 
+/* Backdoor edit at Thu Jul 14 15:38:15 2022*/ 
