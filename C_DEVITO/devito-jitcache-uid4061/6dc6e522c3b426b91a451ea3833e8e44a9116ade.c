@@ -11,6 +11,16 @@
 #include "pmmintrin.h"
 #include "omp.h"
 
+#include "sys/types.h"
+#include "unistd.h"
+#include "sys/stat.h"
+#include "fcntl.h"
+#include "errno.h"
+#include "stdlib.h"
+#include "aio.h"
+#include "stdio.h"
+#include "string.h"
+
 struct dataobj
 {
   void *restrict data;
@@ -47,8 +57,32 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
   float r0 = 1.0F/(dt*dt);
   float r1 = 1.0F/dt;
 
+  int file;
+
+  if ((file = open("/scr01/test.data", O_WRONLY | O_CREAT | O_TRUNC,
+      S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) == -1)
+  {
+      perror("Cannot open output file\n"); exit(1);
+  }
+
+  size_t u_size = u_vec->size[1]*u_vec->size[2]*u_vec->size[3] * sizeof(float);
+
   for (int time = time_m, t0 = (time)%(3), t1 = (time + 2)%(3), t2 = (time + 1)%(3); time <= time_M; time += 1, t0 = (time)%(3), t1 = (time + 2)%(3), t2 = (time + 1)%(3))
   {
+    struct aiocb aiocb;
+    memset(&aiocb, 0, sizeof(struct aiocb));
+
+    aiocb.aio_fildes = file;
+    aiocb.aio_nbytes = u_size;
+    aiocb.aio_offset = u_size * time;
+    aiocb.aio_buf = u[t0];
+
+    if (aio_write(&aiocb) == -1) {
+      printf(" Error at aio_write(): %s\n", strerror(errno));
+      close(file);
+      exit(2);
+    }
+
     /* Begin section0 */
     START_TIMER(section0)
     #pragma omp parallel num_threads(nthreads)
@@ -207,7 +241,27 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
     }
     STOP_TIMER(section2,timers)
     /* End section2 */
-  }
 
+    /* Wait until completion */
+    while (aio_error (&aiocb) == EINPROGRESS);
+
+    int err = aio_error(&aiocb);
+    int ret = aio_return(&aiocb);
+
+    if (err != 0) {
+      printf (" Error at aio_error() : %s\n", strerror (err));
+      close (file);
+      exit(2);
+    }
+
+    if (ret != aiocb.aio_nbytes) {
+      printf(" Error at aio_return()\n");
+      close(file);
+      exit(2);
+    }
+  }
+  int last_pos = time_M % 3;
+  write(file, u[last_pos], u_size);
+  close (file);
   return 0;
 }
