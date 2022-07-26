@@ -1,4 +1,4 @@
-# overthrust-tests - POSIX AIO Implementation
+# overthrust-tests -  Assynchronous Subsampling Implementation
 
 About Implementation:
 
@@ -25,6 +25,7 @@ The edited code adds:
 * Open the scratch file (l: 60)
 
 ```c
+  int step = 4;
   int file;
 
   if ((file = open("/scr01/test.data", O_WRONLY | O_CREAT | O_TRUNC,
@@ -34,50 +35,51 @@ The edited code adds:
   }
 ```
 ** YOU SHOULD CHANGE THE PATH TO A VALID DIRECTORY IN YOUR ENVIRONMENT **
+** STEP VARIABLE DEFINES HOW MUCH OF THE TIMESTEPS WILL BE WRITTEN 1 / STEPS **
 
 * call the `aio_write` with the right parameters (don't forget the offset :p ). Here we are writing the position `t0` while compute `t1` so we are always writing the previous computed time step.  (l: 70)
 
 ```c
     struct aiocb aiocb;
-    memset(&aiocb, 0, sizeof(struct aiocb));
+    if (!(time % step)) {
+      memset(&aiocb, 0, sizeof(struct aiocb));
 
-    aiocb.aio_fildes = file;
-    aiocb.aio_nbytes = u_vec->size[1]*u_vec->size[2]*u_vec->size[3] * sizeof(float);
-    aiocb.aio_offset = u_vec->size[1]*u_vec->size[2]*u_vec->size[3] * sizeof(float) * time;
-    aiocb.aio_buf = u[t0];
+      aiocb.aio_fildes = file;
+      aiocb.aio_nbytes = u_size;
+      aiocb.aio_offset = u_size * counter;
+      aiocb.aio_buf = u[t0];
 
-    if (aio_write(&aiocb) == -1) {
-      printf(" Error at aio_write(): %s\n", strerror(errno));
-      close(file);
-      exit(2);
+      if (aio_write(&aiocb) == -1) {
+        printf(" Error at aio_write(): %s\n", strerror(errno));
+        close(file);
+        exit(2);
+      }
     }
 ```
 
 * Wait until write the write finishes.... And after writing all timesteps, close the file.
 ```c
- /* Wait until completion */
-    {....
+ if (!(time % step)) {
+      /* Wait until completion */
+      while (aio_error (&aiocb) == EINPROGRESS);
 
-    while (aio_error (&aiocb) == EINPROGRESS);
+      int err = aio_error(&aiocb);
+      int ret = aio_return(&aiocb);
 
-    int err = aio_error(&aiocb);
-    int ret = aio_return(&aiocb);
+      if (err != 0) {
+        printf (" Error at aio_error() : %s\n", strerror (err));
+        close (file);
+        exit(2);
+      }
 
-    if (err != 0) {
-      printf (" Error at aio_error() : %s\n", strerror (err));
-      close (file);
-      exit(2);
+      if (ret != aiocb.aio_nbytes) {
+        printf(" Error at aio_return()\n");
+        close(file);
+        exit(2);
+      }
+
+      counter++;
     }
-
-    if (ret != aiocb.aio_nbytes) {
-      printf(" Error at aio_return()\n");
-      close(file);
-      exit(2);
-    }
-  }
-  int last_pos = time_M % 3;
-  write(file, u[last_pos], u_size);
-  close (file);
 ```
 
 * Changed in simple.py the `cflags`.
