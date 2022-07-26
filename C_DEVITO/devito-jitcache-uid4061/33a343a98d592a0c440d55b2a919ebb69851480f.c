@@ -10,6 +10,9 @@
 #include "xmmintrin.h"
 #include "pmmintrin.h"
 #include "omp.h"
+#include "stdio.h"
+#include "unistd.h"
+#include "fcntl.h"
 
 struct dataobj
 {
@@ -47,8 +50,19 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
   float r0 = 1.0F/(dt*dt);
   float r1 = 1.0F/dt;
 
+  int file;
+
+  unsigned long u_size = u_vec->size[1]*u_vec->size[2]*u_vec->size[3];
+
+  if ((file = open("/scr01/test.data", O_WRONLY | O_CREAT | O_TRUNC,
+      S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) == -1)
+  {
+      perror("Cannot open output file\n"); exit(1);
+  }
+
   for (int time = time_m, t0 = (time)%(3), t1 = (time + 2)%(3), t2 = (time + 1)%(3); time <= time_M; time += 1, t0 = (time)%(3), t1 = (time + 2)%(3), t2 = (time + 1)%(3))
   {
+    write(file, u[t0], sizeof(float)*u_size);
     /* Begin section0 */
     START_TIMER(section0)
     #pragma omp parallel num_threads(nthreads)
@@ -208,6 +222,6 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
     STOP_TIMER(section2,timers)
     /* End section2 */
   }
-
+  close(file);
   return 0;
 }
