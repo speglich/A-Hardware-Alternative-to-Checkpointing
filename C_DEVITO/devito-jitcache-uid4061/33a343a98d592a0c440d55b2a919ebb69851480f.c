@@ -10,6 +10,11 @@
 #include "xmmintrin.h"
 #include "pmmintrin.h"
 #include "omp.h"
+#include "pthread.h"
+#include "semaphore.h"
+#include "stdio.h"
+#include "unistd.h"
+#include "fcntl.h"
 
 struct dataobj
 {
@@ -30,6 +35,56 @@ struct profiler
 } ;
 
 
+struct writter_struct {
+    int begin;
+    int end;
+    int fdes;
+    void* vec;
+} ;
+
+sem_t mutex;
+int to_write = 0;
+
+void *Writter(void* arguments){
+
+  struct writter_struct *args = (struct writter_struct *) arguments;
+
+  struct dataobj *restrict u_vec = (struct dataobj *restrict) args->vec;
+
+  float (*restrict u)[u_vec->size[1]][u_vec->size[2]][u_vec->size[3]] __attribute__ ((aligned (64))) = (float (*)[u_vec->size[1]][u_vec->size[2]][u_vec->size[3]]) u_vec->data;
+
+  unsigned long u_size = u_vec->size[1]*u_vec->size[2]*u_vec->size[3];
+
+  int f = args->fdes;
+
+  int begin = args->begin;
+  int end = args->end + 1;
+
+  int pos_write = begin;
+  int len = 0;
+
+  while(pos_write != end) {
+
+    sem_wait(&mutex);
+    len = to_write;
+    sem_post(&mutex);
+
+    int end = pos_write + len;
+
+    for(int i = pos_write; i < end; i++) {
+      write(f, u[i%3], sizeof(float)*u_size);
+      pos_write++;
+    }
+
+    sem_wait(&mutex);
+    to_write -= len;
+    sem_post(&mutex);
+
+  }
+
+  return 0;
+}
+
 int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, const float o_y, const float o_z, struct dataobj *restrict rec_vec, struct dataobj *restrict rec_coords_vec, struct dataobj *restrict src_vec, struct dataobj *restrict src_coords_vec, struct dataobj *restrict u_vec, struct dataobj *restrict vp_vec, const int x_M, const int x_m, const int y_M, const int y_m, const int z_M, const int z_m, const int p_rec_M, const int p_rec_m, const int p_src_M, const int p_src_m, const int time_M, const int time_m, const int x0_blk0_size, const int y0_blk0_size, const int nthreads, const int nthreads_nonaffine, struct profiler * timers)
 {
   float (*restrict damp)[damp_vec->size[1]][damp_vec->size[2]] __attribute__ ((aligned (64))) = (float (*)[damp_vec->size[1]][damp_vec->size[2]]) damp_vec->data;
@@ -47,8 +102,40 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
   float r0 = 1.0F/(dt*dt);
   float r1 = 1.0F/dt;
 
+  int file;
+
+  if ((file = open("/scr01/test.data", O_WRONLY | O_CREAT | O_TRUNC,
+      S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) == -1)
+  {
+      perror("Cannot open output file\n"); exit(1);
+  }
+
+  struct writter_struct args;
+  args.vec = (void *) u_vec;
+  args.fdes = file;
+  args.begin = time_m;
+  args.end = time_M;
+
+  sem_init(&mutex, 0, 1);
+
+  pthread_t thread;
+  int iret1 = pthread_create(&thread, NULL, Writter, (void *) &args);
+
   for (int time = time_m, t0 = (time)%(3), t1 = (time + 2)%(3), t2 = (time + 1)%(3); time <= time_M; time += 1, t0 = (time)%(3), t1 = (time + 2)%(3), t2 = (time + 1)%(3))
   {
+    int busy = 1;
+    while(busy)
+    {
+      if(to_write < 2) {
+        sem_wait(&mutex);
+        to_write++;
+        sem_post(&mutex);
+        busy = 0;
+      } else {
+        sleep(0.1);
+      }
+    }
+
     /* Begin section0 */
     START_TIMER(section0)
     #pragma omp parallel num_threads(nthreads)
@@ -208,6 +295,8 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
     STOP_TIMER(section2,timers)
     /* End section2 */
   }
-
+  pthread_join(thread, NULL);
+  close(file);
   return 0;
 }
+
