@@ -52,9 +52,9 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
 
   int file;
 
-  unsigned long u_size = u_vec->size[1]*u_vec->size[2]*u_vec->size[3];
+  size_t u_size = u_vec->size[1]*u_vec->size[2]*u_vec->size[3]*sizeof(float);
 
-  if ((file = open("/scr01/test.data", O_WRONLY | O_CREAT | O_TRUNC,
+  if ((file = open("data/fio/test.data", O_WRONLY | O_CREAT | O_TRUNC,
       S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) == -1)
   {
       perror("Cannot open output file\n"); exit(1);
@@ -62,7 +62,10 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
 
   for (int time = time_m, t0 = (time)%(3), t1 = (time + 2)%(3), t2 = (time + 1)%(3); time <= time_M; time += 1, t0 = (time)%(3), t1 = (time + 2)%(3), t2 = (time + 1)%(3))
   {
-    write(file, u[t0], sizeof(float)*u_size);
+    int ret = write(file, u[t0], u_size);
+    if (ret != u_size) {
+        perror("Cannot open output file\n"); exit(1);
+    }
     /* Begin section0 */
     START_TIMER(section0)
     #pragma omp parallel num_threads(nthreads)
