@@ -50,22 +50,37 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
   float r0 = 1.0F/(dt*dt);
   float r1 = 1.0F/dt;
 
-  int file;
+  printf("Using nthreads %d\n", nthreads);
 
-  size_t u_size = u_vec->size[1]*u_vec->size[2]*u_vec->size[3]*sizeof(float);
+  int *files = malloc(nthreads * sizeof(int));
 
-  if ((file = open("data/fio/test.data", O_WRONLY | O_CREAT | O_TRUNC,
-      S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) == -1)
+  if (files == NULL)
   {
-      perror("Cannot open output file\n"); exit(1);
+      printf("Error to alloc\n");
+      exit(1);
   }
+
+  for(int i=0; i < nthreads; i++){
+
+    int nvme_id = i % 8;
+
+    char name[50];
+    sprintf(name, "data/nvme%d/thread_%d.data", nvme_id, i);
+
+    printf("Creating file %s\n", name);
+
+    if ((files[i] = open(name, O_WRONLY | O_CREAT | O_TRUNC,
+        S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) == -1)
+    {
+        perror("Cannot open output file\n"); exit(1);
+    }
+
+  }
+
+  size_t u_size = u_vec->size[2]*u_vec->size[3]*sizeof(float);
 
   for (int time = time_m, t0 = (time)%(3), t1 = (time + 2)%(3), t2 = (time + 1)%(3); time <= time_M; time += 1, t0 = (time)%(3), t1 = (time + 2)%(3), t2 = (time + 1)%(3))
   {
-    int ret = write(file, u[t0], u_size);
-    if (ret != u_size) {
-        perror("Cannot open output file\n"); exit(1);
-    }
     /* Begin section0 */
     START_TIMER(section0)
     #pragma omp parallel num_threads(nthreads)
@@ -167,7 +182,6 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
     /* End section1 */
 
     /* Begin section2 */
-    START_TIMER(section2)
     #pragma omp parallel num_threads(nthreads_nonaffine)
     {
       int chunk_size = (int)(fmax(1, (1.0F/3.0F)*(p_rec_M - p_rec_m + 1)/nthreads_nonaffine));
@@ -222,9 +236,26 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
         rec[time][p_rec] = sum;
       }
     }
-    STOP_TIMER(section2,timers)
+
     /* End section2 */
+    START_TIMER(section2)
+    /* Begin section3 */
+    #pragma omp parallel for schedule(static,1)
+    for(int i=0; i < u_vec->size[1];i++)
+    {
+      int tid = i%nthreads;
+      int ret = write(files[tid], u[t2][i], u_size);
+      if (ret != u_size) {
+          perror("Cannot open output file");
+          exit(1);
+      }
+    }
+    STOP_TIMER(section2,timers)
   }
-  close(file);
+
+  for(int i=0; i < nthreads; i++){
+    close(files[i]);
+  }
+
   return 0;
 }
