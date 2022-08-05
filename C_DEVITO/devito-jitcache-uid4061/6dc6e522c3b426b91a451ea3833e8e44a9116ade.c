@@ -59,7 +59,7 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
 
   int file;
 
-  if ((file = open("/scr01/test.data", O_WRONLY | O_CREAT | O_TRUNC,
+  if ((file = open("scr01/test.data", O_WRONLY | O_CREAT | O_TRUNC,
       S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) == -1)
   {
       perror("Cannot open output file\n"); exit(1);
@@ -241,7 +241,7 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
     }
     STOP_TIMER(section2,timers)
     /* End section2 */
-
+    printf("***");
     /* Wait until completion */
     while (aio_error (&aiocb) == EINPROGRESS);
 

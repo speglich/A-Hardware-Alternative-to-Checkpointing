@@ -7,13 +7,9 @@ overthrust_3D_initial_model.h5:
 	wget ftp://slim.gatech.edu/data/SoftwareRelease/WaveformInversion.jl/3DFWI/overthrust_3D_initial_model.h5
 
 foward: overthrust_3D_initial_model.h5 simple.py
-	DEVITO_OPT=advanced \
+	export TMPDIR=/home/gb4018/workspace/overthrust_tests/C_DEVITO
 	DEVITO_LANGUAGE=openmp \
-	DEVITO_PLATFORM=skx \
-	DEVITO_JIT_BACKDOOR=1 \
-	OMP_NUM_THREADS=18 \
-	OMP_PLACES="{0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17}" \
-	TMPDIR=/home/joao.speglich/LDE/overthrust_tests/C_DEVITO \
-	OMP_PROC_BIND=close \
+	OMP_NUM_THREADS=6 \
+	DEVITO_JIT_BACKDOOR=0 \
 	DEVITO_LOGGING=DEBUG \
 	numactl --cpubind=0 --interleave=0  python simple.py
