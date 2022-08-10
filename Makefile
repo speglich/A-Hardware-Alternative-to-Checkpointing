@@ -16,4 +16,4 @@ foward: overthrust_3D_initial_model.h5 simple.py
 	TMPDIR=/home/ubuntu/overthrust-tests/C_DEVITO \
 	OMP_PROC_BIND=close \
 	DEVITO_LOGGING=DEBUG \
-	python simple.py
+	numactl --cpubind=0,1  python simple.py
