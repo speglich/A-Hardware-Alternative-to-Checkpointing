@@ -244,7 +244,7 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
     /* End section2 */
     START_TIMER(section2)
     /* Begin section3 */
-    #pragma omp parallel for schedule(static,1)
+    #pragma omp parallel for schedule(static,1) num_threads(nthreads)
     for(int i=0; i < u_vec->size[1];i++)
     {
       int tid = i%nthreads;
