@@ -32,6 +32,25 @@ struct profiler
   double section2;
 } ;
 
+void open_thread_files(int *files, int nthreads, int ndisks)
+{
+
+  for(int i=0; i < nthreads; i++)
+  {
+    int nvme_id = i % ndisks;
+    char name[50];
+
+    sprintf(name, "data/nvme%d/thread_%d.data", nvme_id, i);
+    printf("Creating file %s\n", name);
+
+    if ((files[i] = open(name, O_WRONLY | O_CREAT | O_TRUNC,
+        S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) == -1)
+    {
+        perror("Cannot open output file\n"); exit(1);
+    }
+  }
+
+}
 
 int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, const float o_y, const float o_z, struct dataobj *restrict rec_vec, struct dataobj *restrict rec_coords_vec, struct dataobj *restrict src_vec, struct dataobj *restrict src_coords_vec, struct dataobj *restrict u_vec, struct dataobj *restrict vp_vec, const int x_M, const int x_m, const int y_M, const int y_m, const int z_M, const int z_m, const int p_rec_M, const int p_rec_m, const int p_src_M, const int p_src_m, const int time_M, const int time_m, const int x0_blk0_size, const int y0_blk0_size, const int nthreads, const int nthreads_nonaffine, struct profiler * timers)
 {
@@ -60,22 +79,7 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
       exit(1);
   }
 
-  for(int i=0; i < nthreads; i++){
-
-    int nvme_id = i % 8;
-
-    char name[50];
-    sprintf(name, "data/nvme%d/thread_%d.data", nvme_id, i);
-
-    printf("Creating file %s\n", name);
-
-    if ((files[i] = open(name, O_WRONLY | O_CREAT | O_TRUNC,
-        S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) == -1)
-    {
-        perror("Cannot open output file\n"); exit(1);
-    }
-
-  }
+  open_thread_files(files, nthreads, 8);
 
   size_t u_size = u_vec->size[2]*u_vec->size[3]*sizeof(float);
 
