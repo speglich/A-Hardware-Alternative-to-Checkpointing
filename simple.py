@@ -94,11 +94,11 @@ def run(space_order=4, kernel='OT4', nbpml=40, filename='', **kwargs):
 
     u = TimeFunction(name='u', grid=grid, time_order=2, space_order=space_order)
 
-    fw_op = solver.op_fwd(save=None)
-    #rev_op = solver.op_grad(save=True)
+    fw_op = solver.op_fwd(save=False)
+    rev_op = solver.op_grad(save=False)
 
     fw_op.apply(rec=rec, src=solver.geometry.src, u=u, dt=dt)
-    #rev_op.apply(u=u, dt=dt, rec=rec)
+    rev_op.apply(u=u, dt=dt, rec=rec)
 
     return
 
