@@ -69,6 +69,11 @@ int Gradient(struct dataobj *restrict damp_vec, const float dt, struct dataobj *
   float r0 = 1.0F/(dt*dt);
   float r1 = 1.0F/dt;
 
+  double read_time = 0.0;
+  double file_time = 0.0;
+
+  struct timeval start, end;
+  gettimeofday(&start, NULL);
   printf("Using nthreads %d\n", nthreads);
 
   int *files = malloc(nthreads * sizeof(int));
@@ -80,6 +85,9 @@ int Gradient(struct dataobj *restrict damp_vec, const float dt, struct dataobj *
   }
 
   open_thread_files(files, nthreads, 8);
+
+  gettimeofday(&end, NULL);
+  file_time += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
 
   size_t u_size = u_vec->size[2]*u_vec->size[3]*sizeof(float);
 
@@ -185,9 +193,8 @@ int Gradient(struct dataobj *restrict damp_vec, const float dt, struct dataobj *
     STOP_TIMER(section1,timers)
     /* End section1 */
 
-    /* Begin section2 */
-    START_TIMER(section2)
-
+    struct timeval start, end;
+    gettimeofday(&start, NULL);
     #pragma omp parallel for schedule(static,1) num_threads(nthreads)
     for(int i=0; i < u_vec->size[1];i++)
     {
@@ -198,8 +205,11 @@ int Gradient(struct dataobj *restrict damp_vec, const float dt, struct dataobj *
           exit(1);
       }
     }
+    gettimeofday(&end, NULL);
+    read_time += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
 
-
+    /* Begin section2 */
+    START_TIMER(section2)
     #pragma omp parallel num_threads(nthreads)
     {
       #pragma omp for collapse(2) schedule(static,1)
@@ -225,15 +235,16 @@ int Gradient(struct dataobj *restrict damp_vec, const float dt, struct dataobj *
     /* End section2 */
   }
 
+  gettimeofday(&start, NULL);
   for(int i=0; i < nthreads; i++){
     close(files[i]);
   }
+  gettimeofday(&end, NULL);
+
+  file_time += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+
+  printf("Time to read all timesteps: %f\n", read_time);
+  printf("Time to manipulate all files: %f\n", file_time);
 
   return 0;
 }
-/* Backdoor edit at Tue Aug 16 14:19:57 2022*/
-/* Backdoor edit at Tue Aug 16 14:32:52 2022*/
-/* Backdoor edit at Tue Aug 16 14:36:17 2022*/
-/* Backdoor edit at Tue Aug 16 14:52:15 2022*/
-/* Backdoor edit at Tue Aug 16 14:58:47 2022*/ 
-/* Backdoor edit at Tue Aug 16 15:04:36 2022*/ 
