@@ -11,6 +11,9 @@
 #include "pmmintrin.h"
 #include "mpi.h"
 #include "omp.h"
+#include "stdio.h"
+#include "unistd.h"
+#include "fcntl.h"
 
 struct dataobj
 {
@@ -42,6 +45,32 @@ static void gathertxyz(float *restrict buf0_vec, const int buf_x_size, const int
 static void scattertxyz(float *restrict buf1_vec, const int buf_x_size, const int buf_y_size, const int buf_z_size, struct dataobj *restrict a0_vec, int otime, int ox, int oy, int oz, const int nthreads);
 static void haloupdate0(struct dataobj *restrict a0_vec, MPI_Comm comm, struct neighborhood * nb, int otime, const int nthreads);
 
+void open_thread_files(int *files, int nthreads, int ndisks)
+{
+
+  for(int i=0; i < nthreads; i++)
+  {
+
+    int myrank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &myrank);
+
+    printf("Rank: %d\n", myrank);
+
+    int socket = (myrank % 2) * 4;
+    int nvme_id = socket + i % ndisks;
+    char name[100];
+
+    sprintf(name, "data/nvme%d/socket_%d_thread_%d.data", nvme_id, myrank, i);
+    printf("Reading file %s\n", name);
+
+    if ((files[i] = open(name, O_RDONLY,
+        S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) == -1)
+    {
+        perror("Cannot open output file\n"); exit(1);
+    }
+  }
+
+}
 int Gradient(struct dataobj *restrict damp_vec, const float dt, struct dataobj *restrict grad_vec, const float o_x, const float o_y, const float o_z, struct dataobj *restrict rec_vec, struct dataobj *restrict rec_coords_vec, struct dataobj *restrict u_vec, struct dataobj *restrict v_vec, struct dataobj *restrict vp_vec, const int x_M, const int x_m, const int y_M, const int y_m, const int z_M, const int z_m, const int p_rec_M, const int p_rec_m, const int time_M, const int time_m, const int x0_blk0_size, const int x1_blk0_size, const int y0_blk0_size, const int y1_blk0_size, MPI_Comm comm, struct neighborhood * nb, const int nthreads, const int nthreads_nonaffine, struct profiler * timers)
 {
   float (*restrict damp)[damp_vec->size[1]][damp_vec->size[2]] __attribute__ ((aligned (64))) = (float (*)[damp_vec->size[1]][damp_vec->size[2]]) damp_vec->data;
@@ -58,6 +87,28 @@ int Gradient(struct dataobj *restrict damp_vec, const float dt, struct dataobj *
 
   float r0 = 1.0F/(dt*dt);
   float r1 = 1.0F/dt;
+
+  double read_time = 0.0;
+  double file_time = 0.0;
+
+  struct timeval start, end;
+  gettimeofday(&start, NULL);
+  printf("Using nthreads %d\n", nthreads);
+
+  int *files = malloc(nthreads * sizeof(int));
+
+  if (files == NULL)
+  {
+      printf("Error to alloc\n");
+      exit(1);
+  }
+
+  open_thread_files(files, nthreads, 4);
+
+  gettimeofday(&end, NULL);
+  file_time += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+
+  size_t u_size = u_vec->size[2]*u_vec->size[3]*sizeof(float);
 
   for (int time = time_M, t0 = (time)%(3), t1 = (time + 2)%(3), t2 = (time + 1)%(3); time >= time_m; time -= 1, t0 = (time)%(3), t1 = (time + 2)%(3), t2 = (time + 1)%(3))
   {
@@ -162,6 +213,21 @@ int Gradient(struct dataobj *restrict damp_vec, const float dt, struct dataobj *
     STOP_TIMER(section1,timers)
     /* End section1 */
 
+    struct timeval start, end;
+    gettimeofday(&start, NULL);
+    #pragma omp parallel for schedule(static,1) num_threads(nthreads)
+    for(int i=0; i < u_vec->size[1];i++)
+    {
+      int tid = i%nthreads;
+      int ret = read(files[tid], u[t0][i], u_size);
+      if (ret != u_size) {
+          perror("Cannot open output file");
+          exit(1);
+      }
+    }
+    gettimeofday(&end, NULL);
+    read_time += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+
     /* Begin section2 */
     START_TIMER(section2)
     #pragma omp parallel num_threads(nthreads)
@@ -188,6 +254,17 @@ int Gradient(struct dataobj *restrict damp_vec, const float dt, struct dataobj *
     STOP_TIMER(section2,timers)
     /* End section2 */
   }
+
+  gettimeofday(&start, NULL);
+  for(int i=0; i < nthreads; i++){
+    close(files[i]);
+  }
+  gettimeofday(&end, NULL);
+
+  file_time += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+
+  printf("Time to read all timesteps: %f\n", read_time);
+  printf("Time to manipulate all files: %f\n", file_time);
 
   return 0;
 }
@@ -272,3 +349,7 @@ static void haloupdate0(struct dataobj *restrict a0_vec, MPI_Comm comm, struct n
   sendrecvtxyz(a0_vec,a0_vec->npsize[1],a0_vec->npsize[2],a0_vec->hsize[7],otime,a0_vec->hofs[2],a0_vec->hofs[4],a0_vec->oofs[6],otime,a0_vec->hofs[2],a0_vec->hofs[4],a0_vec->hofs[7],nb->ccr,nb->ccl,comm,nthreads);
   sendrecvtxyz(a0_vec,a0_vec->npsize[1],a0_vec->npsize[2],a0_vec->hsize[6],otime,a0_vec->hofs[2],a0_vec->hofs[4],a0_vec->oofs[7],otime,a0_vec->hofs[2],a0_vec->hofs[4],a0_vec->hofs[6],nb->ccl,nb->ccr,comm,nthreads);
 }
+/* Backdoor edit at Thu Aug 25 17:31:12 2022*/ 
+/* Backdoor edit at Thu Aug 25 17:37:12 2022*/ 
+/* Backdoor edit at Thu Aug 25 17:46:26 2022*/ 
+/* Backdoor edit at Thu Aug 25 17:46:26 2022*/ 
