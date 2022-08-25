@@ -58,7 +58,7 @@ void open_thread_files(int *files, int nthreads, int ndisks)
 
     int socket = (myrank % 2) * 4;
     int nvme_id = socket + i % ndisks;
-    char name[50];
+    char name[100];
 
     sprintf(name, "data/nvme%d/socket_%d_thread_%d.data", nvme_id, myrank, i);
     printf("Creating file %s\n", name);

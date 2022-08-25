@@ -38,7 +38,7 @@ void open_thread_files(int *files, int nthreads, int ndisks)
   for(int i=0; i < nthreads; i++)
   {
     int nvme_id = i % ndisks;
-    char name[50];
+    char name[100];
 
     sprintf(name, "data/nvme%d/thread_%d.data", nvme_id, i);
     printf("Reading file %s\n", name);
