@@ -248,7 +248,7 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
     for(int i=0; i < u_vec->size[1];i++)
     {
       int tid = i%nthreads;
-      int ret = write(files[tid], u[t2][i], u_size);
+      int ret = write(files[tid], u[t0][i], u_size);
       if (ret != u_size) {
           perror("Cannot open output file");
           exit(1);
@@ -262,4 +262,8 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
   }
 
   return 0;
-}
+}/* Backdoor edit at Fri Aug 26 03:23:07 2022*/
+/* Backdoor edit at Fri Aug 26 10:34:22 2022*/
+/* Backdoor edit at Fri Aug 26 12:33:35 2022*/
+/* Backdoor edit at Fri Aug 26 12:55:41 2022*/
+/* Backdoor edit at Fri Aug 26 13:00:28 2022*/ 
