@@ -239,6 +239,7 @@ class TestGradient(object):
         info(r'2nd order error, Phi(m0+dm)-Phi(m0) - <J(m0)^T \delta d, dm>: %s' % (p2))
         assert np.isclose(p1[0], 1.0, rtol=0.1)
         assert np.isclose(p2[0], 2.0, rtol=0.1)
+        print("Working")
 
     @pytest.mark.parametrize('kernel, shape, spacing, setup_func, time_order', [
         ('OT2', (70, 80), (15., 15.), iso_setup, 2),
@@ -303,6 +304,4 @@ class TestGradient(object):
 
 
 if __name__ == "__main__":
-    TestGradient().test_gradientFWI(dtype=np.float32, shape=(70, 80),
-                                    kernel='OT2', space_order=4,
-                                    checkpointing=False)
+    TestGradient().test_gradientFWI(kernel='OT2', shape=(50, 60), ckp=False, setup_func=iso_setup, time_order=2, space_order=4, dtype=np.float32)

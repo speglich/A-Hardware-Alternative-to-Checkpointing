@@ -8,6 +8,9 @@
 #include "xmmintrin.h"
 #include "pmmintrin.h"
 #include "omp.h"
+#include "stdio.h"
+#include "unistd.h"
+#include "fcntl.h"
 
 struct dataobj
 {
@@ -27,6 +30,25 @@ struct profiler
   double section2;
 } ;
 
+void open_thread_files(int *files, int nthreads, int ndisks)
+{
+
+  for(int i=0; i < nthreads; i++)
+  {
+    int nvme_id = i % ndisks;
+    char name[100];
+
+    sprintf(name, "data/nvme%d/thread_%d.data", nvme_id, i);
+    printf("Creating file %s\n", name);
+
+    if ((files[i] = open(name, O_WRONLY | O_CREAT | O_TRUNC,
+        S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) == -1)
+    {
+        perror("Cannot open output file\n"); exit(1);
+    }
+  }
+
+}
 
 int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, const float o_y, struct dataobj *restrict rec_vec, struct dataobj *restrict rec_coords_vec, struct dataobj *restrict src_vec, struct dataobj *restrict src_coords_vec, struct dataobj *restrict u_vec, struct dataobj *restrict vp_vec, const int x_M, const int x_m, const int y_M, const int y_m, const int p_rec_M, const int p_rec_m, const int p_src_M, const int p_src_m, const int time_M, const int time_m, const int nthreads, const int nthreads_nonaffine, struct profiler * timers)
 {
@@ -44,6 +66,20 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
 
   float r0 = 1.0F/(dt*dt);
   float r1 = 1.0F/dt;
+
+  printf("Using nthreads %d\n", nthreads);
+
+  int *files = malloc(nthreads * sizeof(int));
+
+  if (files == NULL)
+  {
+      printf("Error to alloc\n");
+      exit(1);
+  }
+
+  open_thread_files(files, nthreads, 8);
+
+  size_t u_size = u_vec->size[2]*sizeof(float);
 
   for (int time = time_m; time <= time_M; time += 1)
   {
@@ -111,7 +147,6 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
     /* End section1 */
 
     /* Begin section2 */
-    START_TIMER(section2)
     #pragma omp parallel num_threads(nthreads_nonaffine)
     {
       int chunk_size = (int)(fmax(1, (1.0F/3.0F)*(p_rec_M - p_rec_m + 1)/nthreads_nonaffine));
@@ -146,9 +181,82 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
         rec[time][p_rec] = sum;
       }
     }
-    STOP_TIMER(section2,timers)
+
     /* End section2 */
+    START_TIMER(section2)
+    /* Begin section3 */
+    int t2 = time;
+    #pragma omp parallel for schedule(static,1) num_threads(nthreads)
+    for(int i=0; i < u_vec->size[1];i++)
+    {
+      int tid = i%nthreads;
+      int ret = write(files[tid], u[t2][i], u_size);
+
+      if (ret != u_size) {
+          perror("Cannot open output file");
+          exit(1);
+      }
+
+      if(time == 252 && i == 104) {
+        printf("%d\n", i);
+        for(int k=0; k < u_vec->size[2]; k++){
+          printf("%.3f", u[t2][i][k]);
+        }
+        printf("\n");
+      }
+
+    }
+
+    STOP_TIMER(section2,timers)
+
   }
 
+  for(int i=0; i < nthreads; i++){
+    close(files[i]);
+  }
+
+  printf("time_m %d time_M %d\n", time_m, time_M);
+
   return 0;
-}
+}/* Backdoor edit at Thu Aug 25 21:52:17 2022*/
+/* Backdoor edit at Thu Aug 25 21:52:54 2022*/
+/* Backdoor edit at Thu Aug 25 21:54:05 2022*/
+/* Backdoor edit at Thu Aug 25 21:54:32 2022*/
+/* Backdoor edit at Thu Aug 25 21:55:41 2022*/
+/* Backdoor edit at Thu Aug 25 21:56:06 2022*/
+/* Backdoor edit at Thu Aug 25 22:00:01 2022*/
+/* Backdoor edit at Thu Aug 25 22:00:21 2022*/
+/* Backdoor edit at Thu Aug 25 22:00:52 2022*/
+/* Backdoor edit at Thu Aug 25 22:01:46 2022*/
+/* Backdoor edit at Thu Aug 25 22:02:28 2022*/
+/* Backdoor edit at Thu Aug 25 22:04:53 2022*/
+/* Backdoor edit at Thu Aug 25 22:06:36 2022*/
+/* Backdoor edit at Thu Aug 25 22:07:06 2022*/
+/* Backdoor edit at Thu Aug 25 22:08:31 2022*/
+/* Backdoor edit at Thu Aug 25 22:08:59 2022*/
+/* Backdoor edit at Thu Aug 25 22:10:51 2022*/
+/* Backdoor edit at Thu Aug 25 22:11:14 2022*/
+/* Backdoor edit at Thu Aug 25 22:14:16 2022*/
+/* Backdoor edit at Thu Aug 25 22:14:36 2022*/
+/* Backdoor edit at Thu Aug 25 22:14:54 2022*/
+/* Backdoor edit at Thu Aug 25 22:17:43 2022*/
+/* Backdoor edit at Thu Aug 25 22:20:58 2022*/
+/* Backdoor edit at Thu Aug 25 22:24:22 2022*/
+/* Backdoor edit at Thu Aug 25 22:24:55 2022*/
+/* Backdoor edit at Thu Aug 25 22:28:18 2022*/
+/* Backdoor edit at Thu Aug 25 22:30:45 2022*/
+/* Backdoor edit at Thu Aug 25 22:37:41 2022*/
+/* Backdoor edit at Thu Aug 25 22:38:20 2022*/
+/* Backdoor edit at Thu Aug 25 22:41:06 2022*/
+/* Backdoor edit at Thu Aug 25 22:41:23 2022*/
+/* Backdoor edit at Thu Aug 25 22:41:44 2022*/
+/* Backdoor edit at Thu Aug 25 22:49:08 2022*/
+/* Backdoor edit at Thu Aug 25 22:50:37 2022*/ 
+/* Backdoor edit at Thu Aug 25 22:51:21 2022*/ 
+/* Backdoor edit at Thu Aug 25 22:51:50 2022*/ 
+/* Backdoor edit at Thu Aug 25 22:52:47 2022*/ 
+/* Backdoor edit at Thu Aug 25 22:54:24 2022*/ 
+/* Backdoor edit at Thu Aug 25 23:16:09 2022*/ 
+/* Backdoor edit at Fri Aug 26 00:11:18 2022*/ 
+/* Backdoor edit at Fri Aug 26 00:12:25 2022*/ 
+/* Backdoor edit at Fri Aug 26 00:14:08 2022*/ 
