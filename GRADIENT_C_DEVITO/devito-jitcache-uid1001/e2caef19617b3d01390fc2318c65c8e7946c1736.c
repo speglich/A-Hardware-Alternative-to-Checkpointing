@@ -196,15 +196,6 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
           perror("Cannot open output file");
           exit(1);
       }
-
-      if(time == 252 && i == 104) {
-        printf("%d\n", i);
-        for(int k=0; k < u_vec->size[2]; k++){
-          printf("%.3f", u[t2][i][k]);
-        }
-        printf("\n");
-      }
-
     }
 
     STOP_TIMER(section2,timers)
@@ -251,12 +242,14 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
 /* Backdoor edit at Thu Aug 25 22:41:23 2022*/
 /* Backdoor edit at Thu Aug 25 22:41:44 2022*/
 /* Backdoor edit at Thu Aug 25 22:49:08 2022*/
-/* Backdoor edit at Thu Aug 25 22:50:37 2022*/ 
-/* Backdoor edit at Thu Aug 25 22:51:21 2022*/ 
-/* Backdoor edit at Thu Aug 25 22:51:50 2022*/ 
-/* Backdoor edit at Thu Aug 25 22:52:47 2022*/ 
-/* Backdoor edit at Thu Aug 25 22:54:24 2022*/ 
-/* Backdoor edit at Thu Aug 25 23:16:09 2022*/ 
-/* Backdoor edit at Fri Aug 26 00:11:18 2022*/ 
-/* Backdoor edit at Fri Aug 26 00:12:25 2022*/ 
-/* Backdoor edit at Fri Aug 26 00:14:08 2022*/ 
+/* Backdoor edit at Thu Aug 25 22:50:37 2022*/
+/* Backdoor edit at Thu Aug 25 22:51:21 2022*/
+/* Backdoor edit at Thu Aug 25 22:51:50 2022*/
+/* Backdoor edit at Thu Aug 25 22:52:47 2022*/
+/* Backdoor edit at Thu Aug 25 22:54:24 2022*/
+/* Backdoor edit at Thu Aug 25 23:16:09 2022*/
+/* Backdoor edit at Fri Aug 26 00:11:18 2022*/
+/* Backdoor edit at Fri Aug 26 00:12:25 2022*/
+/* Backdoor edit at Fri Aug 26 00:14:08 2022*/
+/* Backdoor edit at Fri Aug 26 03:14:30 2022*/
+/* Backdoor edit at Fri Aug 26 03:15:21 2022*/ 

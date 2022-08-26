@@ -165,15 +165,9 @@ int Gradient(struct dataobj *restrict damp_vec, const float dt, struct dataobj *
     STOP_TIMER(section1,timers)
     /* End section1 */
 
-    printf("Before %d\n", time);
-    for(int k=0; k < u_vec->size[2]; k++){
-      printf("%.3f", u[time][104][k]);
-    }
-    printf("\n");
-
     struct timeval start, end;
     gettimeofday(&start, NULL);
-    
+
     #pragma omp parallel for schedule(static,1) num_threads(nthreads)
     for(int i= u_vec->size[1]-1;i>=0;i--)
     {
@@ -192,12 +186,6 @@ int Gradient(struct dataobj *restrict damp_vec, const float dt, struct dataobj *
 
       counters[tid]++;
     }
-
-    printf("After %d\n", time);
-    for(int k=0; k < u_vec->size[2]; k++){
-      printf("%.3f", u[time][104][k]);
-    }
-    printf("\n");
 
     gettimeofday(&end, NULL);
     read_time += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
@@ -240,9 +228,11 @@ int Gradient(struct dataobj *restrict damp_vec, const float dt, struct dataobj *
 /* Backdoor edit at Thu Aug 25 22:50:39 2022*/
 /* Backdoor edit at Thu Aug 25 22:51:22 2022*/
 /* Backdoor edit at Thu Aug 25 22:51:51 2022*/
-/* Backdoor edit at Thu Aug 25 22:52:48 2022*/ 
-/* Backdoor edit at Thu Aug 25 22:54:26 2022*/ 
-/* Backdoor edit at Thu Aug 25 23:16:10 2022*/ 
-/* Backdoor edit at Fri Aug 26 00:11:20 2022*/ 
-/* Backdoor edit at Fri Aug 26 00:12:26 2022*/ 
-/* Backdoor edit at Fri Aug 26 00:14:10 2022*/ 
+/* Backdoor edit at Thu Aug 25 22:52:48 2022*/
+/* Backdoor edit at Thu Aug 25 22:54:26 2022*/
+/* Backdoor edit at Thu Aug 25 23:16:10 2022*/
+/* Backdoor edit at Fri Aug 26 00:11:20 2022*/
+/* Backdoor edit at Fri Aug 26 00:12:26 2022*/
+/* Backdoor edit at Fri Aug 26 00:14:10 2022*/
+/* Backdoor edit at Fri Aug 26 03:14:31 2022*/
+/* Backdoor edit at Fri Aug 26 03:15:22 2022*/ 
