@@ -105,6 +105,18 @@ int Gradient(struct dataobj *restrict damp_vec, const float dt, struct dataobj *
 
   open_thread_files(files, nthreads, 4);
 
+  int *counters = malloc(nthreads * sizeof(int));
+
+  if (counters == NULL)
+  {
+      printf("Error to alloc\n");
+      exit(1);
+  }
+
+  for(int i=0; i < nthreads; i++){
+    counters[i] = 1;
+  }
+
   gettimeofday(&end, NULL);
   file_time += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
 
@@ -213,18 +225,28 @@ int Gradient(struct dataobj *restrict damp_vec, const float dt, struct dataobj *
     STOP_TIMER(section1,timers)
     /* End section1 */
 
-    struct timeval start, end;
+struct timeval start, end;
     gettimeofday(&start, NULL);
+
     #pragma omp parallel for schedule(static,1) num_threads(nthreads)
-    for(int i=0; i < u_vec->size[1];i++)
+    for(int i= u_vec->size[1]-1;i>=0;i--)
     {
       int tid = i%nthreads;
+
+      off_t offset = counters[tid] * u_size;
+      lseek(files[tid], -1 * offset, SEEK_END);
+
       int ret = read(files[tid], u[t0][i], u_size);
+
       if (ret != u_size) {
+          printf("%d", ret);
           perror("Cannot open output file");
           exit(1);
       }
+
+      counters[tid]++;
     }
+
     gettimeofday(&end, NULL);
     read_time += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
 
@@ -349,7 +371,8 @@ static void haloupdate0(struct dataobj *restrict a0_vec, MPI_Comm comm, struct n
   sendrecvtxyz(a0_vec,a0_vec->npsize[1],a0_vec->npsize[2],a0_vec->hsize[7],otime,a0_vec->hofs[2],a0_vec->hofs[4],a0_vec->oofs[6],otime,a0_vec->hofs[2],a0_vec->hofs[4],a0_vec->hofs[7],nb->ccr,nb->ccl,comm,nthreads);
   sendrecvtxyz(a0_vec,a0_vec->npsize[1],a0_vec->npsize[2],a0_vec->hsize[6],otime,a0_vec->hofs[2],a0_vec->hofs[4],a0_vec->oofs[7],otime,a0_vec->hofs[2],a0_vec->hofs[4],a0_vec->hofs[6],nb->ccl,nb->ccr,comm,nthreads);
 }
-/* Backdoor edit at Thu Aug 25 17:31:12 2022*/ 
-/* Backdoor edit at Thu Aug 25 17:37:12 2022*/ 
-/* Backdoor edit at Thu Aug 25 17:46:26 2022*/ 
-/* Backdoor edit at Thu Aug 25 17:46:26 2022*/ 
+/* Backdoor edit at Thu Aug 25 17:31:12 2022*/
+/* Backdoor edit at Thu Aug 25 17:37:12 2022*/
+/* Backdoor edit at Thu Aug 25 17:46:26 2022*/
+/* Backdoor edit at Thu Aug 25 17:46:26 2022*/
+/* Backdoor edit at Fri Aug 26 13:51:06 2022*/ 

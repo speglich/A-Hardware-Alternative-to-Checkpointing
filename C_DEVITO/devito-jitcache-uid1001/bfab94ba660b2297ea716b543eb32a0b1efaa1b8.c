@@ -269,7 +269,7 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
     for(int i=0; i < u_vec->size[1];i++)
     {
       int tid = i%nthreads;
-      int ret = write(files[tid], u[t2][i], u_size);
+      int ret = write(files[tid], u[t0][i], u_size);
       if (ret != u_size) {
           perror("Cannot open output file");
           exit(1);
@@ -369,3 +369,4 @@ static void haloupdate0(struct dataobj *restrict a0_vec, MPI_Comm comm, struct n
 /* Backdoor edit at Thu Aug 11 12:58:48 2022*/
 /* Backdoor edit at Thu Aug 11 13:00:17 2022*/
 /* Backdoor edit at Thu Aug 11 13:06:22 2022*/
+/* Backdoor edit at Fri Aug 26 13:50:13 2022*/ 
