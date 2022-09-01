@@ -10,6 +10,9 @@
 #include "xmmintrin.h"
 #include "pmmintrin.h"
 #include "omp.h"
+#include "stdio.h"
+#include "unistd.h"
+#include "fcntl.h"
 
 struct dataobj
 {
@@ -29,6 +32,25 @@ struct profiler
   double section2;
 } ;
 
+void open_thread_files(int *files, int nthreads, int ndisks)
+{
+
+  for(int i=0; i < nthreads; i++)
+  {
+    int nvme_id = i % ndisks;
+    char name[100];
+
+    sprintf(name, "data/nvme%d/thread_%d.data", nvme_id, i);
+    printf("Creating file %s\n", name);
+
+    if ((files[i] = open(name, O_WRONLY | O_CREAT | O_TRUNC,
+        S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) == -1)
+    {
+        perror("Cannot open output file\n"); exit(1);
+    }
+  }
+
+}
 
 int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, const float o_y, const float o_z, struct dataobj *restrict rec_vec, struct dataobj *restrict rec_coords_vec, struct dataobj *restrict src_vec, struct dataobj *restrict src_coords_vec, struct dataobj *restrict u_vec, struct dataobj *restrict vp_vec, const int x_M, const int x_m, const int y_M, const int y_m, const int z_M, const int z_m, const int p_rec_M, const int p_rec_m, const int p_src_M, const int p_src_m, const int time_M, const int time_m, const int x0_blk0_size, const int y0_blk0_size, const int nthreads, const int nthreads_nonaffine, struct profiler * timers)
 {
@@ -46,6 +68,20 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
 
   float r0 = 1.0F/(dt*dt);
   float r1 = 1.0F/dt;
+
+  printf("Using nthreads %d\n", nthreads);
+
+  int *files = malloc(nthreads * sizeof(int));
+
+  if (files == NULL)
+  {
+      printf("Error to alloc\n");
+      exit(1);
+  }
+
+  open_thread_files(files, nthreads, 8);
+
+  size_t u_size = u_vec->size[2]*u_vec->size[3]*sizeof(float);
 
   for (int time = time_m, t0 = (time)%(3), t1 = (time + 2)%(3), t2 = (time + 1)%(3); time <= time_M; time += 1, t0 = (time)%(3), t1 = (time + 2)%(3), t2 = (time + 1)%(3))
   {
@@ -150,7 +186,6 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
     /* End section1 */
 
     /* Begin section2 */
-    START_TIMER(section2)
     #pragma omp parallel num_threads(nthreads_nonaffine)
     {
       int chunk_size = (int)(fmax(1, (1.0F/3.0F)*(p_rec_M - p_rec_m + 1)/nthreads_nonaffine));
@@ -205,9 +240,27 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
         rec[time][p_rec] = sum;
       }
     }
-    STOP_TIMER(section2,timers)
+
     /* End section2 */
+    START_TIMER(section2)
+    /* Begin section3 */
+    #pragma omp parallel for schedule(static,1) num_threads(nthreads)
+    for(int i=0; i < u_vec->size[1];i++)
+    {
+      int tid = i%nthreads;
+      int ret = write(files[tid], u[t0][i], u_size);
+      if (ret != u_size) {
+          perror("Cannot open output file");
+          exit(1);
+      }
+    }
+    STOP_TIMER(section2,timers)
+  }
+
+  for(int i=0; i < nthreads; i++){
+    close(files[i]);
   }
 
   return 0;
 }
+/* Backdoor edit at Thu Sep  1 21:26:28 2022*/ 
