@@ -51,26 +51,6 @@ void open_thread_files(int *files, int nthreads, int ndisks)
 
 }
 
-void open_compressed_thread_files(int *files, int nthreads, int ndisks)
-{
-
-  for(int i=0; i < nthreads; i++)
-  {
-    int nvme_id = i % ndisks;
-    char name[100];
-
-    sprintf(name, "data/nvme%d/compressed_thread_%d.data", nvme_id, i);
-    printf("Reading file %s\n", name);
-
-    if ((files[i] = open(name, O_RDONLY,
-        S_IRUSR)) == -1)
-    {
-        perror("Cannot open output file\n"); exit(1);
-    }
-  }
-
-}
-
 int Gradient(struct dataobj *restrict damp_vec, const float dt, struct dataobj *restrict grad_vec, const float o_x, const float o_y, struct dataobj *restrict rec_vec, struct dataobj *restrict rec_coords_vec, struct dataobj *restrict u_vec, struct dataobj *restrict v_vec, struct dataobj *restrict vp_vec, const int x_M, const int x_m, const int y_M, const int y_m, const int p_rec_M, const int p_rec_m, const int time_M, const int time_m, const int nthreads, const int nthreads_nonaffine, struct profiler * timers)
 {
   float (*restrict damp)[damp_vec->size[1]] __attribute__ ((aligned (64))) = (float (*)[damp_vec->size[1]]) damp_vec->data;
@@ -104,29 +84,6 @@ int Gradient(struct dataobj *restrict damp_vec, const float dt, struct dataobj *
   }
 
   open_thread_files(files, nthreads, 8);
-
-  int *counters = malloc(nthreads * sizeof(int));
-
-  if (counters == NULL)
-  {
-      printf("Error to alloc\n");
-      exit(1);
-  }
-
-  for(int i=0; i < nthreads; i++){
-    counters[i] = 1;
-  }
-
-
-  int *compressed_files = malloc(nthreads * sizeof(int));
-
-  if (files == NULL)
-  {
-      printf("Error to alloc\n");
-      exit(1);
-  }
-
-  open_compressed_thread_files(compressed_files, nthreads, 8);
 
   size_t *compressed_offset = malloc(nthreads * sizeof(size_t));
 
@@ -217,23 +174,6 @@ int Gradient(struct dataobj *restrict damp_vec, const float dt, struct dataobj *
     {
       int tid = i%nthreads;
 
-      int compression = 1;
-
-      if(compression ==  0) {
-        off_t offset = counters[tid] * u_size;
-        lseek(files[tid], -1 * offset, SEEK_END);
-
-        int ret = read(files[tid], u[time][i], u_size);
-
-        if (ret != u_size) {
-            printf("%d", ret);
-            perror("Cannot open output file");
-            exit(1);
-        }
-
-        counters[tid]++;
-      } else {
-
       zfp_type type = zfp_type_float;
       zfp_field* field = zfp_field_1d(u[t2][i], type, u_vec->size[2]);
 
@@ -250,9 +190,9 @@ int Gradient(struct dataobj *restrict damp_vec, const float dt, struct dataobj *
       zfp_stream_rewind(zfp);
 
       compressed_offset[tid] += bufsize;
-      lseek(compressed_files[tid], -1 * compressed_offset[tid], SEEK_END);
+      lseek(files[tid], -1 * compressed_offset[tid], SEEK_END);
 
-      int ret = read(compressed_files[tid], buffer, bufsize);
+      int ret = read(files[tid], buffer, bufsize);
 
       if (ret != bufsize) {
           printf("%d", ret);
@@ -269,8 +209,6 @@ int Gradient(struct dataobj *restrict damp_vec, const float dt, struct dataobj *
       zfp_stream_close(zfp);
       stream_close(stream);
       free(buffer);
-
-      }
 
     }
 
@@ -300,10 +238,6 @@ int Gradient(struct dataobj *restrict damp_vec, const float dt, struct dataobj *
     close(files[i]);
   }
 
-  for(int i=0; i < nthreads; i++){
-    close(compressed_files[i]);
-  }
-
   gettimeofday(&end, NULL);
 
   file_time += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
@@ -315,10 +249,5 @@ int Gradient(struct dataobj *restrict damp_vec, const float dt, struct dataobj *
 
   return 0;
 }
-/* Backdoor edit at Thu Sep  1 13:59:53 2022*/
-/* Backdoor edit at Thu Sep  1 14:00:16 2022*/
-/* Backdoor edit at Thu Sep  1 14:02:18 2022*/
-/* Backdoor edit at Thu Sep  1 14:02:35 2022*/
-/* Backdoor edit at Thu Sep  1 14:13:23 2022*/
-/* Backdoor edit at Thu Sep  1 14:14:57 2022*/
-/* Backdoor edit at Thu Sep  1 14:17:13 2022*/ 
+/* Backdoor edit at Thu Sep  1 15:07:12 2022*/
+/* Backdoor edit at Thu Sep  1 15:26:19 2022*/ 

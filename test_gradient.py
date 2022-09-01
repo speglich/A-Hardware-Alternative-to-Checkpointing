@@ -12,6 +12,21 @@ from examples.seismic import Receiver, demo_model, setup_geometry
 from examples.seismic.tti import tti_setup
 from examples.seismic.viscoacoustic import viscoacoustic_setup
 
+from devito import configuration, compiler_registry
+from devito.arch.compiler import GNUCompiler
+
+class MyOwnCompiler(GNUCompiler):
+    def __init__(self, *args, **kwargs):
+        super(MyOwnCompiler, self).__init__(*args, **kwargs)
+        #self.include_dirs.append("/home/ubuntu/zfp/include")
+        #self.library_dirs.append("/home/ubuntu/zfp/lib")
+        self.libraries.append("zfp")
+
+### Make sure Devito is aware of this new Compiler class
+compiler_registry['mycompiler'] = MyOwnCompiler
+configuration.add("compiler", "custom", list(compiler_registry), callback=lambda i: compiler_registry[i]())
+### Then, what remains to be done is asking Devito to use MyOwnCompiler
+configuration['compiler'] = 'mycompiler'
 
 class TestGradient(object):
 

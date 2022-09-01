@@ -51,26 +51,6 @@ void open_thread_files(int *files, int nthreads, int ndisks)
 
 }
 
-void open_compressed_thread_files(int *files, int nthreads, int ndisks)
-{
-
-  for(int i=0; i < nthreads; i++)
-  {
-    int nvme_id = i % ndisks;
-    char name[100];
-
-    sprintf(name, "data/nvme%d/compressed_thread_%d.data", nvme_id, i);
-    printf("Creating file %s\n", name);
-
-    if ((files[i] = open(name, O_WRONLY | O_CREAT | O_TRUNC,
-        S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) == -1)
-    {
-        perror("Cannot open output file\n"); exit(1);
-    }
-  }
-
-}
-
 int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, const float o_y, struct dataobj *restrict rec_vec, struct dataobj *restrict rec_coords_vec, struct dataobj *restrict src_vec, struct dataobj *restrict src_coords_vec, struct dataobj *restrict u_vec, struct dataobj *restrict vp_vec, const int x_M, const int x_m, const int y_M, const int y_m, const int p_rec_M, const int p_rec_m, const int p_src_M, const int p_src_m, const int time_M, const int time_m, const int nthreads, const int nthreads_nonaffine, struct profiler * timers)
 {
   float (*restrict damp)[damp_vec->size[1]] __attribute__ ((aligned (64))) = (float (*)[damp_vec->size[1]]) damp_vec->data;
@@ -91,7 +71,6 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
   printf("Using nthreads %d\n", nthreads);
 
   int *files = malloc(nthreads * sizeof(int));
-  int *compressed_files = malloc(nthreads * sizeof(int));
 
   if (files == NULL)
   {
@@ -100,7 +79,6 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
   }
 
   open_thread_files(files, nthreads, 8);
-  open_compressed_thread_files(compressed_files, nthreads, 8);
 
   size_t u_size = u_vec->size[2]*sizeof(float);
 
@@ -213,13 +191,6 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
     for(int i=0; i < u_vec->size[1];i++)
     {
       int tid = i%nthreads;
-      int ret = write(files[tid], u[t2][i], u_size);
-
-      if (ret != u_size) {
-          perror("Cannot open output file");
-          exit(1);
-      }
-
       zfp_type type = zfp_type_float;
       zfp_field* field = zfp_field_1d(u[t2][i], type, u_vec->size[2]);
 
@@ -242,11 +213,11 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
         exit(1);
       }
 
-      write(compressed_files[tid], buffer, zfp_field_size(field, NULL));
-        zfp_field_free(field);
-        zfp_stream_close(zfp);
-        stream_close(stream);
-        free(buffer);
+      write(files[tid], buffer, zfp_field_size(field, NULL));
+      zfp_field_free(field);
+      zfp_stream_close(zfp);
+      stream_close(stream);
+      free(buffer);
     }
 
     STOP_TIMER(section2,timers)
@@ -257,28 +228,11 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
     close(files[i]);
   }
 
-  for(int i=0; i < nthreads; i++){
-    close(compressed_files[i]);
-  }
-
   printf("time_m %d time_M %d\n", time_m, time_M);
 
   return 0;
-}/* Backdoor edit at Thu Sep  1 13:49:45 2022*/ 
-/* Backdoor edit at Thu Sep  1 13:50:42 2022*/ 
-/* Backdoor edit at Thu Sep  1 13:51:22 2022*/ 
-/* Backdoor edit at Thu Sep  1 13:52:01 2022*/ 
-/* Backdoor edit at Thu Sep  1 13:54:54 2022*/ 
-/* Backdoor edit at Thu Sep  1 13:55:52 2022*/ 
-/* Backdoor edit at Thu Sep  1 13:56:53 2022*/ 
-/* Backdoor edit at Thu Sep  1 13:57:32 2022*/ 
-/* Backdoor edit at Thu Sep  1 13:58:00 2022*/ 
-/* Backdoor edit at Thu Sep  1 13:58:28 2022*/ 
-/* Backdoor edit at Thu Sep  1 13:59:22 2022*/ 
-/* Backdoor edit at Thu Sep  1 13:59:52 2022*/ 
-/* Backdoor edit at Thu Sep  1 14:00:15 2022*/ 
-/* Backdoor edit at Thu Sep  1 14:02:17 2022*/ 
-/* Backdoor edit at Thu Sep  1 14:02:33 2022*/ 
-/* Backdoor edit at Thu Sep  1 14:13:22 2022*/ 
-/* Backdoor edit at Thu Sep  1 14:14:55 2022*/ 
-/* Backdoor edit at Thu Sep  1 14:17:11 2022*/ 
+}
+/* Backdoor edit at Thu Sep  1 15:05:24 2022*/
+/* Backdoor edit at Thu Sep  1 15:06:29 2022*/
+/* Backdoor edit at Thu Sep  1 15:07:10 2022*/ 
+/* Backdoor edit at Thu Sep  1 15:26:18 2022*/ 
