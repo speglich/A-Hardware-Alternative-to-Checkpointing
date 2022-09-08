@@ -13,6 +13,7 @@
 #include "stdio.h"
 #include "unistd.h"
 #include "fcntl.h"
+#include "zfp.h"
 
 struct dataobj
 {
@@ -86,16 +87,16 @@ int Gradient(struct dataobj *restrict damp_vec, const float dt, struct dataobj *
 
   open_thread_files(files, nthreads, 8);
 
-  int *counters = malloc(nthreads * sizeof(int));
+  size_t *compressed_offset = malloc(nthreads * sizeof(size_t));
 
-  if (counters == NULL)
+  if (compressed_offset == NULL)
   {
       printf("Error to alloc\n");
       exit(1);
   }
 
   for(int i=0; i < nthreads; i++){
-    counters[i] = 1;
+    compressed_offset[i] = 0;
   }
 
   gettimeofday(&end, NULL);
@@ -208,23 +209,60 @@ int Gradient(struct dataobj *restrict damp_vec, const float dt, struct dataobj *
     struct timeval start, end;
     gettimeofday(&start, NULL);
 
+    void* buffer = NULL;
+    size_t bs = 0;
     #pragma omp parallel for schedule(static,1) num_threads(nthreads)
     for(int i= u_vec->size[1]-1;i>=0;i--)
     {
       int tid = i%nthreads;
 
-      off_t offset = counters[tid] * u_size;
-      lseek(files[tid], -1 * offset, SEEK_END);
+      zfp_type type = zfp_type_float;
+      zfp_field* field = zfp_field_2d(u[t2][i], type, u_vec->size[2],u_vec->size[3]);
 
-      int ret = read(files[tid], u[t0][i], u_size);
+      zfp_stream* zfp = zfp_stream_open(NULL);
 
-      if (ret != u_size) {
+      zfp_stream_set_rate(zfp, 0.5, type, zfp_field_dimensionality(field), zfp_false);
+
+      size_t bufsize = zfp_stream_maximum_size(zfp, field);
+
+      if (buffer == NULL) {
+        buffer = malloc(bufsize);
+        bs = bufsize;
+      }
+      else if (bs != bufsize) {
+        free(buffer);
+        buffer = malloc(bufsize);
+        bs = bufsize;
+      }
+
+      bitstream* stream = stream_open(buffer, bufsize);
+
+      zfp_stream_set_bit_stream(zfp, stream);
+      zfp_stream_rewind(zfp);
+
+      compressed_offset[tid] += bufsize;
+      lseek(files[tid], -1 * compressed_offset[tid], SEEK_END);
+
+      int ret = read(files[tid], buffer, bufsize);
+
+      if (ret != bufsize) {
           printf("%d", ret);
           perror("Cannot open output file");
           exit(1);
       }
 
-      counters[tid]++;
+      if (!zfp_decompress(zfp, field)) {
+        printf("decompression failed\n");
+        exit(1);
+      }
+
+      zfp_field_free(field);
+      zfp_stream_close(zfp);
+      stream_close(stream);
+    }
+
+    if (buffer != NULL) {
+      free(buffer);
     }
 
     gettimeofday(&end, NULL);
@@ -261,6 +299,7 @@ int Gradient(struct dataobj *restrict damp_vec, const float dt, struct dataobj *
   for(int i=0; i < nthreads; i++){
     close(files[i]);
   }
+
   gettimeofday(&end, NULL);
 
   file_time += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
@@ -270,4 +309,7 @@ int Gradient(struct dataobj *restrict damp_vec, const float dt, struct dataobj *
 
   return 0;
 }
-/* Backdoor edit at Thu Sep  1 21:27:54 2022*/ 
+/* Backdoor edit at Thu Sep  1 21:27:54 2022*/
+/* Backdoor edit at Thu Sep  1 22:02:52 2022*/
+/* Backdoor edit at Fri Sep  2 14:19:48 2022*/ 
+/* Backdoor edit at Fri Sep  2 14:26:52 2022*/ 

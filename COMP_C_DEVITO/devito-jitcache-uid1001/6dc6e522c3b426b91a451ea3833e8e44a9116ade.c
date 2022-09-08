@@ -13,6 +13,7 @@
 #include "stdio.h"
 #include "unistd.h"
 #include "fcntl.h"
+#include "zfp.h"
 
 struct dataobj
 {
@@ -244,17 +245,58 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
     /* End section2 */
     START_TIMER(section2)
     /* Begin section3 */
+
+    void* buffer = NULL;
+    size_t bs = 0;
+
     #pragma omp parallel for schedule(static,1) num_threads(nthreads)
     for(int i=0; i < u_vec->size[1];i++)
     {
       int tid = i%nthreads;
-      int ret = write(files[tid], u[t0][i], u_size);
-      if (ret != u_size) {
-          perror("Cannot open output file");
-          exit(1);
+      zfp_type type = zfp_type_float;
+      zfp_field* field = zfp_field_2d(u[t0][i], type, u_vec->size[2], u_vec->size[3]);
+
+      zfp_stream* zfp = zfp_stream_open(NULL);
+
+      zfp_stream_set_rate(zfp, 0.5, type, zfp_field_dimensionality(field), zfp_false);
+
+      size_t bufsize = zfp_stream_maximum_size(zfp, field);
+
+      if (buffer == NULL) {
+        buffer = malloc(bufsize);
+        bs = bufsize;
       }
+      else if (bs != bufsize) {
+        free(buffer);
+        buffer = malloc(bufsize);
+        bs = bufsize;
+      }
+
+      bitstream* stream = stream_open(buffer, bufsize);
+
+      zfp_stream_set_bit_stream(zfp, stream);
+      zfp_stream_rewind(zfp);
+
+      size_t zfpsize = zfp_compress(zfp, field);
+
+      if (!zfpsize) {
+        fprintf(stderr, "compression failed\n");
+        exit(1);
+      }
+
+      write(files[tid], buffer, zfp_field_size(field, NULL));
+      zfp_field_free(field);
+      zfp_stream_close(zfp);
+      stream_close(stream);
     }
+
+    if (buffer != NULL) {
+      free(buffer);
+    }
+
+
     STOP_TIMER(section2,timers)
+
   }
 
   for(int i=0; i < nthreads; i++){
@@ -262,5 +304,6 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
   }
 
   return 0;
-}
-/* Backdoor edit at Thu Sep  1 21:26:28 2022*/ 
+}/* Backdoor edit at Thu Sep  1 22:01:55 2022*/
+/* Backdoor edit at Fri Sep  2 14:18:51 2022*/
+/* Backdoor edit at Fri Sep  2 14:26:00 2022*/ 
