@@ -33,7 +33,7 @@ struct profiler
   double section2;
 } ;
 
-void open_thread_files(int *files, int nthreads, int ndisks)
+void open_thread_files(int *files, int *metas, int nthreads, int ndisks)
 {
 
   for(int i=0; i < nthreads; i++)
@@ -45,6 +45,15 @@ void open_thread_files(int *files, int nthreads, int ndisks)
     printf("Creating file %s\n", name);
 
     if ((files[i] = open(name, O_WRONLY | O_CREAT | O_TRUNC,
+        S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) == -1)
+    {
+        perror("Cannot open output file\n"); exit(1);
+    }
+
+    sprintf(name, "data/nvme%d/thread_%d.meta", nvme_id, i);
+    printf("Creating file %s\n", name);
+
+    if ((metas[i] = open(name, O_WRONLY | O_CREAT | O_TRUNC,
         S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) == -1)
     {
         perror("Cannot open output file\n"); exit(1);
@@ -73,14 +82,15 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
   printf("Using nthreads %d\n", nthreads);
 
   int *files = malloc(nthreads * sizeof(int));
+  int *metas = malloc(nthreads * sizeof(int));
 
-  if (files == NULL)
+  if (files == NULL || metas == NULL)
   {
       printf("Error to alloc\n");
       exit(1);
   }
 
-  open_thread_files(files, nthreads, 8);
+  open_thread_files(files, metas, nthreads, 8);
 
   size_t u_size = u_vec->size[2]*u_vec->size[3]*sizeof(float);
 
@@ -244,34 +254,25 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
 
     /* End section2 */
     START_TIMER(section2)
+
+    zfp_type type = zfp_type_float;
+
     /* Begin section3 */
-
-    void* buffer = NULL;
-    size_t bs = 0;
-
     #pragma omp parallel for schedule(static,1) num_threads(nthreads)
     for(int i=0; i < u_vec->size[1];i++)
     {
       int tid = i%nthreads;
-      zfp_type type = zfp_type_float;
-      zfp_field* field = zfp_field_2d(u[t0][i], type, u_vec->size[2], u_vec->size[3]);
 
+      zfp_field* field = zfp_field_2d(u[t0][i], type, u_vec->size[2], u_vec->size[3]);
       zfp_stream* zfp = zfp_stream_open(NULL);
 
-      zfp_stream_set_rate(zfp, 0.5, type, zfp_field_dimensionality(field), zfp_false);
+      zfp_stream_set_rate(zfp, 16, type, zfp_field_dimensionality(field), zfp_false);
+      //zfp_stream_set_reversible(zfp);
+      //zfp_stream_set_accuracy(zfp, 1e-8);
 
       size_t bufsize = zfp_stream_maximum_size(zfp, field);
 
-      if (buffer == NULL) {
-        buffer = malloc(bufsize);
-        bs = bufsize;
-      }
-      else if (bs != bufsize) {
-        free(buffer);
-        buffer = malloc(bufsize);
-        bs = bufsize;
-      }
-
+      void* buffer = malloc(bufsize);
       bitstream* stream = stream_open(buffer, bufsize);
 
       zfp_stream_set_bit_stream(zfp, stream);
@@ -284,16 +285,14 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
         exit(1);
       }
 
-      write(files[tid], buffer, zfp_field_size(field, NULL));
+      write(files[tid], buffer, zfpsize);
+      write(metas[tid], &zfpsize, sizeof(size_t));
+
       zfp_field_free(field);
       zfp_stream_close(zfp);
       stream_close(stream);
-    }
-
-    if (buffer != NULL) {
       free(buffer);
     }
-
 
     STOP_TIMER(section2,timers)
 
@@ -303,7 +302,8 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
     close(files[i]);
   }
 
+  free(files);
+  free(metas);
+
   return 0;
-}/* Backdoor edit at Thu Sep  1 22:01:55 2022*/
-/* Backdoor edit at Fri Sep  2 14:18:51 2022*/
-/* Backdoor edit at Fri Sep  2 14:26:00 2022*/ 
+}
