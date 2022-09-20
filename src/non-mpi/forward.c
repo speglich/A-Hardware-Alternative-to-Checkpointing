@@ -262,8 +262,4 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
   }
 
   return 0;
-}/* Backdoor edit at Fri Aug 26 03:23:07 2022*/
-/* Backdoor edit at Fri Aug 26 10:34:22 2022*/
-/* Backdoor edit at Fri Aug 26 12:33:35 2022*/
-/* Backdoor edit at Fri Aug 26 12:55:41 2022*/
-/* Backdoor edit at Fri Aug 26 13:00:28 2022*/ 
+}

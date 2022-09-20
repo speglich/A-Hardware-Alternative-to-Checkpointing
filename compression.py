@@ -13,8 +13,12 @@ from devito import configuration, compiler_registry
 from devito.arch.compiler import GNUCompiler
 
 files = {
-    'compression-forward': 'src/compression/non-mpi/forward.c',
-    'compression-gradient': 'src/compression/non-mpi/gradient.c'
+    'compression-forward' : 'src/compression/non-mpi/forward.c',
+    'compression-gradient' : 'src/compression/non-mpi/gradient.c',
+    'forward' : 'src/non-mpi/forward.c',
+    'gradient' : 'src/non-mpi/gradient.c',
+    'forward-mpi' : 'src/mpi/forward.c',
+    'gradient-mpi' : 'src/mpi/gradient.c'
     }
 
 def operatorInjector(op, payload):
@@ -100,7 +104,7 @@ def overthrust_setup_tti(filename, tn=1000, space_order=2, nbpml=40,
                                  space_order=space_order, **kwargs)
 
 
-def run(space_order=4, kernel='OT4', nbpml=40, filename='', **kwargs):
+def run(space_order=4, kernel='OT4', nbpml=40, filename='', to_disk=True, compression=False, mpi=False, **kwargs):
 
     if kernel in ['OT2', 'OT4']:
         solver = overthrust_setup(filename=filename, nbpml=nbpml,
@@ -124,8 +128,20 @@ def run(space_order=4, kernel='OT4', nbpml=40, filename='', **kwargs):
     fw_op = solver.op_fwd(save=False)
     rev_op = solver.op_grad(save=False)
 
-    operatorInjector(fw_op, files ['compression-forward'])
-    operatorInjector(rev_op, files ['compression-gradient'])
+    if to_disk and compression:
+
+        operatorInjector(fw_op, files ['compression-forward'])
+        operatorInjector(rev_op, files ['compression-gradient'])
+
+    elif to_disk and mpi:
+
+        operatorInjector(fw_op, files ['forward-mpi'])
+        operatorInjector(rev_op, files ['gradient-mpi'])
+
+    elif to_disk:
+
+        operatorInjector(fw_op, files ['forward'])
+        operatorInjector(rev_op, files ['gradient'])
 
     fw_op.apply(rec=rec, src=solver.geometry.src, u=u, dt=dt)
     rev_op.apply(u=u, dt=dt, rec=rec)

@@ -270,4 +270,3 @@ int Gradient(struct dataobj *restrict damp_vec, const float dt, struct dataobj *
 
   return 0;
 }
-/* Backdoor edit at Fri Aug 26 13:01:54 2022*/ 
