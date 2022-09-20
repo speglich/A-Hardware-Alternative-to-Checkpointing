@@ -4,6 +4,10 @@
 #define START_TIMER(S) struct timeval start_ ## S , end_ ## S ; gettimeofday(&start_ ## S , NULL);
 #define STOP_TIMER(S,T) gettimeofday(&end_ ## S, NULL); T->S += (double)(end_ ## S .tv_sec-start_ ## S.tv_sec)+(double)(end_ ## S .tv_usec-start_ ## S .tv_usec)/1000000;
 
+#ifndef NDISKS
+#define NDISKS 8
+#endif
+
 #include "stdlib.h"
 #include "math.h"
 #include "sys/time.h"
@@ -32,12 +36,12 @@ struct profiler
   double section2;
 } ;
 
-void open_thread_files(int *files, int nthreads, int ndisks)
+void open_thread_files(int *files, int nthreads)
 {
 
   for(int i=0; i < nthreads; i++)
   {
-    int nvme_id = i % ndisks;
+    int nvme_id = i % NDISKS;
     char name[100];
 
     sprintf(name, "data/nvme%d/thread_%d.data", nvme_id, i);
@@ -75,6 +79,7 @@ int Gradient(struct dataobj *restrict damp_vec, const float dt, struct dataobj *
   struct timeval start, end;
   gettimeofday(&start, NULL);
   printf("Using nthreads %d\n", nthreads);
+  printf("Using ndisks %d\n", NDISKS);
 
   int *files = malloc(nthreads * sizeof(int));
 
@@ -84,7 +89,7 @@ int Gradient(struct dataobj *restrict damp_vec, const float dt, struct dataobj *
       exit(1);
   }
 
-  open_thread_files(files, nthreads, 8);
+  open_thread_files(files, nthreads);
 
   int *counters = malloc(nthreads * sizeof(int));
 

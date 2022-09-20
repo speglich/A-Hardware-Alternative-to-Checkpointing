@@ -156,18 +156,40 @@ if __name__ == "__main__":
 
     parser.add_argument("-so", "--space_order", default=6,
                         type=int, help="Space order of the simulation")
+
     parser.add_argument("--nbpml", default=40,
                         type=int, help="Number of PML layers around the domain")
+
     parser.add_argument("-k", dest="kernel", default='OT2',
                         choices=['OT2', 'OT4', 'TTI'],
                         help="Choice of finite-difference kernel")
 
+    parser.add_argument("--mpi", default=False, action="store_true",
+                        help="Use MPI on experiments")
+
+    parser.add_argument("--compression", default=False, action="store_true",
+                        help="Use Compression on experiments")
+
+    parser.add_argument("--rate", default=16,
+                        type=int, help="Set the Compression Rate to compression")
+
+    parser.add_argument("--disks", default=8, type=int,
+                        help="Number of PML layers around the domain")
+
     args = parser.parse_args()
 
     class ZFPCompiler(GNUCompiler):
-        def __init__(self, *args, **kwargs):
-            super(ZFPCompiler, self).__init__(*args, **kwargs)
+        def __init__(self, *c_args, **kwargs):
+
+            super(ZFPCompiler, self).__init__(*c_args, **kwargs)
+
             self.libraries.append("zfp")
+
+            d_ndisks = "NDISKS=%d" % args.disks
+            d_rate = "RATE=%d" % args.rate
+
+            self.defines.append(d_ndisks)
+            self.defines.append(d_rate)
 
     compiler_registry['zfpcompile'] = ZFPCompiler
     configuration.add("compiler", "custom", list(compiler_registry), callback=lambda i: compiler_registry[i]())
@@ -176,4 +198,7 @@ if __name__ == "__main__":
     run(nbpml=args.nbpml,
         space_order=args.space_order,
         kernel=args.kernel,
-        filename='overthrust_3D_initial_model.h5')
+        filename='overthrust_3D_initial_model.h5',
+        to_disk=True,
+        compression=args.compression,
+        mpi=args.mpi)
