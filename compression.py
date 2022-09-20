@@ -4,26 +4,37 @@ from examples.seismic import (Receiver, TimeAxis, RickerSource,
 from examples.seismic.acoustic import AcousticWaveSolver
 from examples.seismic.tti import AnisotropicWaveSolver
 import numpy as np
-from util import from_hdf5
 
+from util import from_hdf5
+from shutil import copyfile
 from devito import TimeFunction
 from devito.data.allocators import ExternalAllocator
-
 from devito import configuration, compiler_registry
 from devito.arch.compiler import GNUCompiler
 
-class MyOwnCompiler(GNUCompiler):
-    def __init__(self, *args, **kwargs):
-        super(MyOwnCompiler, self).__init__(*args, **kwargs)
-        #self.include_dirs.append("/home/ubuntu/zfp/include")
-        #self.library_dirs.append("/home/ubuntu/zfp/lib")
-        self.libraries.append("zfp")
+files = {
+    'compression-forward': 'src/compression/non-mpi/forward.c',
+    'compression-gradient': 'src/compression/non-mpi/gradient.c'
+    }
 
-### Make sure Devito is aware of this new Compiler class
-compiler_registry['mycompiler'] = MyOwnCompiler
-configuration.add("compiler", "custom", list(compiler_registry), callback=lambda i: compiler_registry[i]())
-### Then, what remains to be done is asking Devito to use MyOwnCompiler
-configuration['compiler'] = 'mycompiler'
+def operatorInjector(op, payload):
+
+    configuration['jit-backdoor'] = True
+    configuration.add('payload', payload)
+
+    # Force compilation *and* loading upon the next `op.apply`
+
+    op._lib = None
+    op._cfunction = None
+
+    if op._soname:
+        del op._soname
+
+    cfile = "%s.c" % str(op._compiler.get_jit_dir().joinpath(op._soname))
+
+    copyfile(payload, cfile)
+
+    return
 
 def overthrust_setup(filename, kernel='OT2', tn=1000, src_coordinates=None,
                      space_order=2, datakey='m0', nbpml=40, dtype=np.float32,
@@ -113,6 +124,9 @@ def run(space_order=4, kernel='OT4', nbpml=40, filename='', **kwargs):
     fw_op = solver.op_fwd(save=False)
     rev_op = solver.op_grad(save=False)
 
+    operatorInjector(fw_op, files ['compression-forward'])
+    operatorInjector(rev_op, files ['compression-gradient'])
+
     fw_op.apply(rec=rec, src=solver.geometry.src, u=u, dt=dt)
     rev_op.apply(u=u, dt=dt, rec=rec)
 
@@ -133,6 +147,15 @@ if __name__ == "__main__":
                         help="Choice of finite-difference kernel")
 
     args = parser.parse_args()
+
+    class ZFPCompiler(GNUCompiler):
+        def __init__(self, *args, **kwargs):
+            super(ZFPCompiler, self).__init__(*args, **kwargs)
+            self.libraries.append("zfp")
+
+    compiler_registry['zfpcompile'] = ZFPCompiler
+    configuration.add("compiler", "custom", list(compiler_registry), callback=lambda i: compiler_registry[i]())
+    configuration['compiler'] = 'zfpcompile'
 
     run(nbpml=args.nbpml,
         space_order=args.space_order,
