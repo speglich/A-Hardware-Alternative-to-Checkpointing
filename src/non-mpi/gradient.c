@@ -36,6 +36,13 @@ struct profiler
   double section2;
 } ;
 
+struct io_profiler
+{
+  double open;
+  double read;
+  double close;
+} ;
+
 void open_thread_files(int *files, int nthreads)
 {
 
@@ -56,6 +63,35 @@ void open_thread_files(int *files, int nthreads)
 
 }
 
+void save(int nthreads, struct profiler * timers, struct io_profiler * iop, long int read_size)
+{
+  printf(">>>>>>>>>>>>>> REVERSE <<<<<<<<<<<<<<<<<\n");
+
+  printf("Threads %d\n", nthreads);
+  printf("Disks %d\n", NDISKS);
+
+  printf("[REV] Section0 %.2lf s\n", timers->section0);
+  printf("[REV] Section1 %.2lf s\n", timers->section1);
+  printf("[REV] Section2 %.2lf s\n", timers->section2);
+
+  printf("[IO] Open %.2lf s\n", iop->open);
+  printf("[IO] Read %.2lf s\n", iop->read);
+  printf("[IO] Close %.2lf s\n", iop->close);
+
+  char name[100];
+  sprintf(name, "rev_disks_%d_threads_%d.csv", NDISKS, nthreads);
+
+  FILE *fpt;
+  fpt = fopen(name, "w");
+
+  fprintf(fpt,"Disks, Threads, Bytes, [REV] Section0, [REV] Section1, [REV] Section2, [IO] Open, [IO] Read, [IO] Close\n");
+
+  fprintf(fpt,"%d, %d, %ld, %.2lf, %.2lf, %.2lf, %.2lf, %.2lf, %.2lf\n", NDISKS, nthreads, read_size,
+        timers->section0, timers->section1, timers->section2, iop->open, iop->read, iop->close);
+
+  fclose(fpt);
+}
+
 int Gradient(struct dataobj *restrict damp_vec, const float dt, struct dataobj *restrict grad_vec, const float o_x, const float o_y, const float o_z, struct dataobj *restrict rec_vec, struct dataobj *restrict rec_coords_vec, struct dataobj *restrict u_vec, struct dataobj *restrict v_vec, struct dataobj *restrict vp_vec, const int x_M, const int x_m, const int y_M, const int y_m, const int z_M, const int z_m, const int p_rec_M, const int p_rec_m, const int time_M, const int time_m, const int x0_blk0_size, const int x1_blk0_size, const int y0_blk0_size, const int y1_blk0_size, const int nthreads, const int nthreads_nonaffine, struct profiler * timers)
 {
   float (*restrict damp)[damp_vec->size[1]][damp_vec->size[2]] __attribute__ ((aligned (64))) = (float (*)[damp_vec->size[1]][damp_vec->size[2]]) damp_vec->data;
@@ -73,20 +109,21 @@ int Gradient(struct dataobj *restrict damp_vec, const float dt, struct dataobj *
   float r0 = 1.0F/(dt*dt);
   float r1 = 1.0F/dt;
 
-  double read_time = 0.0;
-  double file_time = 0.0;
+  struct io_profiler * iop = malloc(sizeof(struct io_profiler));
 
-  struct timeval start, end;
-  gettimeofday(&start, NULL);
-  printf("Using nthreads %d\n", nthreads);
-  printf("Using ndisks %d\n", NDISKS);
+  iop->open = 0;
+  iop->read = 0;
+  iop->close = 0;
+
+   /* Begin open files Section */
+
+  START_TIMER(open)
 
   int *files = malloc(nthreads * sizeof(int));
-
   if (files == NULL)
   {
-      printf("Error to alloc\n");
-      exit(1);
+    printf("Error to alloc\n");
+    exit(1);
   }
 
   open_thread_files(files, nthreads);
@@ -95,16 +132,16 @@ int Gradient(struct dataobj *restrict damp_vec, const float dt, struct dataobj *
 
   if (counters == NULL)
   {
-      printf("Error to alloc\n");
-      exit(1);
+    printf("Error to alloc\n");
+    exit(1);
   }
 
   for(int i=0; i < nthreads; i++){
     counters[i] = 1;
   }
 
-  gettimeofday(&end, NULL);
-  file_time += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+  STOP_TIMER(open, iop)
+  /* End open files section */
 
   size_t u_size = u_vec->size[2]*u_vec->size[3]*sizeof(float);
 
@@ -210,9 +247,8 @@ int Gradient(struct dataobj *restrict damp_vec, const float dt, struct dataobj *
     STOP_TIMER(section1,timers)
     /* End section1 */
 
-    struct timeval start, end;
-    gettimeofday(&start, NULL);
-
+    /* Begin read section */
+    START_TIMER(read)
     #pragma omp parallel for schedule(static,1) num_threads(nthreads)
     for(int i= u_vec->size[1]-1;i>=0;i--)
     {
@@ -231,9 +267,8 @@ int Gradient(struct dataobj *restrict damp_vec, const float dt, struct dataobj *
 
       counters[tid]++;
     }
-
-    gettimeofday(&end, NULL);
-    read_time += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+    STOP_TIMER(read, iop);
+    /* End read section */
 
     /* Begin section2 */
     START_TIMER(section2)
@@ -262,16 +297,21 @@ int Gradient(struct dataobj *restrict damp_vec, const float dt, struct dataobj *
     /* End section2 */
   }
 
-  gettimeofday(&start, NULL);
+  /* Begin close section */
+  START_TIMER(close)
   for(int i=0; i < nthreads; i++){
     close(files[i]);
   }
-  gettimeofday(&end, NULL);
+  STOP_TIMER(close, iop)
+  /* End close section */
 
-  file_time += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+  long int read_size = (time_M - time_m+1) * u_vec->size[1] * u_size;
 
-  printf("Time to read all timesteps: %f\n", read_time);
-  printf("Time to manipulate all files: %f\n", file_time);
+  save(nthreads, timers, iop, read_size);
+
+  free(iop);
+  free(files);
+  free(counters);
 
   return 0;
 }
