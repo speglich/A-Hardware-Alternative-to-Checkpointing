@@ -84,7 +84,7 @@ void save(int nthreads, struct profiler * timers, struct io_profiler * iop, long
   FILE *fpt;
   fpt = fopen(name, "w");
 
-  fprintf(fpt,"Disks, Threads, Bytes, [FWD] Section0, [FWD] Section1, [FWD] Section2, [IOP] Open, [IOP] Write, [IOP] Close\n");
+  fprintf(fpt,"Disks, Threads, Bytes, [FWD] Section0, [FWD] Section1, [FWD] Section2, [IO] Open, [IO] Write, [IO] Close\n");
 
   fprintf(fpt,"%d, %d, %ld, %.2lf, %.2lf, %.2lf, %.2lf, %.2lf, %.2lf\n", NDISKS, nthreads, write_size,
         timers->section0, timers->section1, timers->section2, iop->open, iop->write, iop->close);

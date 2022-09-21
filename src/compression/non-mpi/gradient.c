@@ -41,6 +41,14 @@ struct profiler
   double section2;
 } ;
 
+struct io_profiler
+{
+  double open;
+  double read;
+  double decompress;
+  double close;
+} ;
+
 void open_thread_files(int *files, int *metas, int nthreads)
 {
 
@@ -70,6 +78,37 @@ void open_thread_files(int *files, int *metas, int nthreads)
   }
 
   return;
+}
+
+void save(int nthreads, struct profiler * timers, struct io_profiler * iop, long int read_size)
+{
+  printf(">>>>>>>>>>>>>> ZFP REVERSE <<<<<<<<<<<<<<<<<\n");
+
+  printf("Threads %d\n", nthreads);
+  printf("Disks %d\n", NDISKS);
+  printf("Rate %d\n", RATE);
+
+  printf("[REV] Section0 %.2lf s\n", timers->section0);
+  printf("[REV] Section1 %.2lf s\n", timers->section1);
+  printf("[REV] Section2 %.2lf s\n", timers->section2);
+
+  printf("[IO] Open %.2lf s\n", iop->open);
+  printf("[IO] Read %.2lf s\n", iop->read);
+  printf("[IO] Decompress %.2lf s\n", iop->decompress);
+  printf("[IO] Close %.2lf s\n", iop->close);
+
+  char name[100];
+  sprintf(name, "zfp_%d_rev_disks_%d_threads_%d.csv", RATE, NDISKS, nthreads);
+
+  FILE *fpt;
+  fpt = fopen(name, "w");
+
+  fprintf(fpt,"Disks, Threads, Bytes, Rate, [REV] Section0, [REV] Section1, [REV] Section2, [IO] Open, [IO] Read, [IO] Decompress, [IO] Close\n");
+
+  fprintf(fpt,"%d, %d, %ld, %d, %.2lf, %.2lf, %.2lf, %.2lf, %.2lf, %.2lf, %.2lf\n", NDISKS, nthreads, read_size, RATE,
+        timers->section0, timers->section1, timers->section2, iop->open, iop->read, iop->decompress, iop->close);
+
+  fclose(fpt);
 }
 
 size_t** get_slices_size(int *metas, int *spt, int nthreads) {
@@ -119,16 +158,17 @@ int Gradient(struct dataobj *restrict damp_vec, const float dt, struct dataobj *
   float r0 = 1.0F/(dt*dt);
   float r1 = 1.0F/dt;
 
-  double read_time = 0.0;
-  double file_time = 0.0;
+  struct io_profiler * iop = malloc(sizeof(struct io_profiler));
 
-  struct timeval start, end;
-  gettimeofday(&start, NULL);
+  iop->open = 0;
+  iop->read = 0;
+  iop->decompress = 0;
+  iop->close = 0;
 
-  printf(">>>>>>>>> COMPRESSSION <<<<<<<<<<<<<<<\n");
-  printf("Using nthreads %d\n", nthreads);
-  printf("Using ndisks %d\n", NDISKS);
-  printf("Using RATE %d\n", RATE);
+  long int read_size =  0;
+
+  /* Begin open files Section */
+  START_TIMER(open)
 
   int *files = malloc(nthreads * sizeof(int));
   int *metas = malloc(nthreads * sizeof(int));
@@ -156,8 +196,8 @@ int Gradient(struct dataobj *restrict damp_vec, const float dt, struct dataobj *
     close(metas[tid]);
   }
 
-  gettimeofday(&end, NULL);
-  file_time += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+  STOP_TIMER(open, iop)
+  /* End open files section */
 
   size_t u_size = u_vec->size[2]*u_vec->size[3]*sizeof(float);
 
@@ -263,9 +303,8 @@ int Gradient(struct dataobj *restrict damp_vec, const float dt, struct dataobj *
     STOP_TIMER(section1,timers)
     /* End section1 */
 
-    struct timeval start, end;
-    gettimeofday(&start, NULL);
-
+    /* Begin decompress section */
+    START_TIMER(decompress)
     #pragma omp parallel for schedule(static,1) num_threads(nthreads)
     for(int i= u_vec->size[1]-1;i>=0;i--)
     {
@@ -295,6 +334,7 @@ int Gradient(struct dataobj *restrict damp_vec, const float dt, struct dataobj *
       lseek(files[tid], -1 * offset[tid], SEEK_END);
 
       int ret = read(files[tid], buffer, slices_size[tid][slice]);
+      read_size += slices_size[tid][slice];
 
       if (ret != slices_size[tid][slice]) {
           printf("%zu\n", offset[tid]);
@@ -314,8 +354,8 @@ int Gradient(struct dataobj *restrict damp_vec, const float dt, struct dataobj *
       spt[tid]--;
     }
 
-    gettimeofday(&end, NULL);
-    read_time += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+    STOP_TIMER(decompress, iop)
+    /* End decompress section */
 
     /* Begin section2 */
     START_TIMER(section2)
@@ -344,19 +384,19 @@ int Gradient(struct dataobj *restrict damp_vec, const float dt, struct dataobj *
     /* End section2 */
   }
 
-  gettimeofday(&start, NULL);
+  /* Begin close section */
+  START_TIMER(close)
   for(int i=0; i < nthreads; i++){
     close(files[i]);
   }
+  STOP_TIMER(close, iop)
+  /* End close section */
 
-  gettimeofday(&end, NULL);
+  iop->decompress = iop->decompress - iop->read;
 
-  file_time += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+  save(nthreads, timers, iop, read_size);
 
-  printf("Time to read all timesteps: %f\n", read_time);
-  printf("Time to manipulate all files: %f\n", file_time);
-  printf("Number of timesteps %d\n", time_M - time_m);
-
+  free(iop);
   free(files);
   free(metas);
 

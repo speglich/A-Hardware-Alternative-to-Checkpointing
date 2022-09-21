@@ -61,6 +61,7 @@ void open_thread_files(int *files, int nthreads)
     }
   }
 
+  return;
 }
 
 void save(int nthreads, struct profiler * timers, struct io_profiler * iop, long int read_size)
@@ -115,8 +116,7 @@ int Gradient(struct dataobj *restrict damp_vec, const float dt, struct dataobj *
   iop->read = 0;
   iop->close = 0;
 
-   /* Begin open files Section */
-
+  /* Begin open files Section */
   START_TIMER(open)
 
   int *files = malloc(nthreads * sizeof(int));
