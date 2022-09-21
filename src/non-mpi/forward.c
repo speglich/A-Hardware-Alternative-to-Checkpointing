@@ -36,6 +36,13 @@ struct profiler
   double section2;
 } ;
 
+struct io_profiler
+{
+  double open;
+  double write;
+  double close;
+} ;
+
 void open_thread_files(int *files, int nthreads)
 {
 
@@ -56,6 +63,34 @@ void open_thread_files(int *files, int nthreads)
 
 }
 
+void save(int nthreads, struct profiler * timers, struct io_profiler * iop)
+{
+  printf(">>>>>>>>>>>>>> FORWARD <<<<<<<<<<<<<<<<<\n");
+
+  printf("Threads %d\n", nthreads);
+  printf("Disks %d\n", NDISKS);
+
+  printf("[FWD] Section0 %.2lf s\n", timers->section0);
+  printf("[FWD] Section1 %.2lf s\n", timers->section1);
+  printf("[FWD] Section2 %.2lf s\n", timers->section2);
+
+  printf("[IOP] Open %.2lf s\n", iop->open);
+  printf("[IOP] Write %.2lf s\n", iop->write);
+  printf("[IOP] Close %.2lf s\n", iop->close);
+
+  char name[100];
+  sprintf(name, "disks_%d_threads_%d.csv", NDISKS, nthreads);
+
+  FILE *fpt;
+  fpt = fopen(name, "w");
+
+  fprintf(fpt,"Disks, Threads, [FWD] Section0, [FWD] Section1, [FWD] Section2, [IOP] Open, [IOP] Write, [IOP] Close\n");
+
+  fprintf(fpt,"%d, %d, %.2lf, %.2lf, %.2lf, %.2lf, %.2lf, %.2lf\n", NDISKS, nthreads,
+        timers->section0, timers->section1, timers->section2, iop->open, iop->write, iop->close);
+
+  fclose(fpt);
+}
 int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, const float o_y, const float o_z, struct dataobj *restrict rec_vec, struct dataobj *restrict rec_coords_vec, struct dataobj *restrict src_vec, struct dataobj *restrict src_coords_vec, struct dataobj *restrict u_vec, struct dataobj *restrict vp_vec, const int x_M, const int x_m, const int y_M, const int y_m, const int z_M, const int z_m, const int p_rec_M, const int p_rec_m, const int p_src_M, const int p_src_m, const int time_M, const int time_m, const int x0_blk0_size, const int y0_blk0_size, const int nthreads, const int nthreads_nonaffine, struct profiler * timers)
 {
   float (*restrict damp)[damp_vec->size[1]][damp_vec->size[2]] __attribute__ ((aligned (64))) = (float (*)[damp_vec->size[1]][damp_vec->size[2]]) damp_vec->data;
@@ -73,18 +108,25 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
   float r0 = 1.0F/(dt*dt);
   float r1 = 1.0F/dt;
 
-  printf("Using nthreads %d\n", nthreads);
-  printf("Using ndisks %d\n", NDISKS);
+  struct io_profiler * iop = malloc(sizeof(struct io_profiler));
+
+  iop->open = 0;
+  iop->write = 0;
+  iop->close = 0;
+
+  /* Begin Open Files Section */
+  START_TIMER(open)
 
   int *files = malloc(nthreads * sizeof(int));
-
   if (files == NULL)
   {
       printf("Error to alloc\n");
       exit(1);
   }
-
   open_thread_files(files, nthreads);
+
+  STOP_TIMER(open, iop)
+  /* End Open Files Section */
 
   size_t u_size = u_vec->size[2]*u_vec->size[3]*sizeof(float);
 
@@ -191,6 +233,7 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
     /* End section1 */
 
     /* Begin section2 */
+    START_TIMER(section2)
     #pragma omp parallel num_threads(nthreads_nonaffine)
     {
       int chunk_size = (int)(fmax(1, (1.0F/3.0F)*(p_rec_M - p_rec_m + 1)/nthreads_nonaffine));
@@ -245,10 +288,11 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
         rec[time][p_rec] = sum;
       }
     }
-
+    STOP_TIMER(section2,timers)
     /* End section2 */
-    START_TIMER(section2)
-    /* Begin section3 */
+
+    /* Begin write section */
+    START_TIMER(write)
     #pragma omp parallel for schedule(static,1) num_threads(nthreads)
     for(int i=0; i < u_vec->size[1];i++)
     {
@@ -259,12 +303,22 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
           exit(1);
       }
     }
-    STOP_TIMER(section2,timers)
+    STOP_TIMER(write, iop);
+    /* End write section */
   }
 
+  /* Begin close section */
+  START_TIMER(close)
   for(int i=0; i < nthreads; i++){
     close(files[i]);
   }
+  STOP_TIMER(close, iop)
+  /* End close section */
+
+  save(nthreads, timers, iop);
+
+  free(iop);
+  free(files);
 
   return 0;
 }
