@@ -123,25 +123,29 @@ def run(space_order=4, kernel='OT4', nbpml=40, filename='', to_disk=True, compre
 
     dt = solver.model.critical_dt
 
-    u = TimeFunction(name='u', grid=grid, time_order=2, space_order=space_order)
+    if to_disk:
 
-    fw_op = solver.op_fwd(save=False)
-    rev_op = solver.op_grad(save=False)
+        u = TimeFunction(name='u', grid=grid, time_order=2, space_order=space_order)
+        fw_op = solver.op_fwd(save=False)
+        rev_op = solver.op_grad(save=False)
 
-    if to_disk and compression:
+        if compression:
+            operatorInjector(fw_op, files ['compression-forward'])
+            operatorInjector(rev_op, files ['compression-gradient'])
 
-        operatorInjector(fw_op, files ['compression-forward'])
-        operatorInjector(rev_op, files ['compression-gradient'])
+        elif mpi:
+            operatorInjector(fw_op, files ['forward-mpi'])
+            operatorInjector(rev_op, files ['gradient-mpi'])
 
-    elif to_disk and mpi:
+        else:
+            operatorInjector(fw_op, files ['forward'])
+            operatorInjector(rev_op, files ['gradient'])
 
-        operatorInjector(fw_op, files ['forward-mpi'])
-        operatorInjector(rev_op, files ['gradient-mpi'])
+    else:
 
-    elif to_disk:
-
-        operatorInjector(fw_op, files ['forward'])
-        operatorInjector(rev_op, files ['gradient'])
+        u = TimeFunction(name='u', grid=grid, time_order=2, space_order=space_order, save=solver.geometry.nt)
+        fw_op = solver.op_fwd(save=True)
+        rev_op = solver.op_grad(save=True)
 
     fw_op.apply(rec=rec, src=solver.geometry.src, u=u, dt=dt)
     rev_op.apply(u=u, dt=dt, rec=rec)

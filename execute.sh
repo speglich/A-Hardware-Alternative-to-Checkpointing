@@ -1,8 +1,8 @@
 #!/bin/bash
 
-echo $HOSTNAME
-
-for repeat in `seq 0 0`; do
-    time make
-    #rm -rf /scr01/test.data
+for disk in `seq 1 8`; do
+    make DISK=$disk
+    for rate in 2 4 8 16; do
+        make compression DISK=$disk RATE=$rate
+    done
 done
