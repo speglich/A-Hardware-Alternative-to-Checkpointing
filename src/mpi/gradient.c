@@ -4,6 +4,14 @@
 #define START_TIMER(S) struct timeval start_ ## S , end_ ## S ; gettimeofday(&start_ ## S , NULL);
 #define STOP_TIMER(S,T) gettimeofday(&end_ ## S, NULL); T->S += (double)(end_ ## S .tv_sec-start_ ## S.tv_sec)+(double)(end_ ## S .tv_usec-start_ ## S .tv_usec)/1000000;
 
+#ifndef NDISKS
+#define NDISKS 8
+#endif
+
+#ifndef DPS
+#define DPS 4
+#endif
+
 #include "stdlib.h"
 #include "math.h"
 #include "sys/time.h"
@@ -40,12 +48,19 @@ struct profiler
   double section2;
 } ;
 
+struct io_profiler
+{
+  double open;
+  double read;
+  double close;
+} ;
+
 static void sendrecvtxyz(struct dataobj *restrict a0_vec, const int buf_x_size, const int buf_y_size, const int buf_z_size, int ogtime, int ogx, int ogy, int ogz, int ostime, int osx, int osy, int osz, int fromrank, int torank, MPI_Comm comm, const int nthreads);
 static void gathertxyz(float *restrict buf0_vec, const int buf_x_size, const int buf_y_size, const int buf_z_size, struct dataobj *restrict a0_vec, int otime, int ox, int oy, int oz, const int nthreads);
 static void scattertxyz(float *restrict buf1_vec, const int buf_x_size, const int buf_y_size, const int buf_z_size, struct dataobj *restrict a0_vec, int otime, int ox, int oy, int oz, const int nthreads);
 static void haloupdate0(struct dataobj *restrict a0_vec, MPI_Comm comm, struct neighborhood * nb, int otime, const int nthreads);
 
-void open_thread_files(int *files, int nthreads, int ndisks)
+void open_thread_files(int *files, int nthreads)
 {
 
   for(int i=0; i < nthreads; i++)
@@ -53,11 +68,8 @@ void open_thread_files(int *files, int nthreads, int ndisks)
 
     int myrank;
     MPI_Comm_rank(MPI_COMM_WORLD, &myrank);
-
-    printf("Rank: %d\n", myrank);
-
-    int socket = (myrank % 2) * 4;
-    int nvme_id = socket + i % ndisks;
+    int socket = (myrank % 2) * DPS;
+    int nvme_id = socket + i % NDISKS;
     char name[100];
 
     sprintf(name, "data/nvme%d/socket_%d_thread_%d.data", nvme_id, myrank, i);
@@ -70,7 +82,47 @@ void open_thread_files(int *files, int nthreads, int ndisks)
     }
   }
 
+  return;
 }
+
+void save(int nthreads, struct profiler * timers, struct io_profiler * iop, long int read_size)
+{
+
+  int myrank;
+  MPI_Comm_rank(MPI_COMM_WORLD, &myrank);
+
+  if (myrank != 0)
+  {
+    return;
+  }
+
+  printf(">>>>>>>>>>>>>> MPI REVERSE <<<<<<<<<<<<<<<<<\n");
+
+  printf("Threads %d\n", nthreads);
+  printf("Disks %d\n", NDISKS);
+
+  printf("[REV] Section0 %.2lf s\n", timers->section0);
+  printf("[REV] Section1 %.2lf s\n", timers->section1);
+  printf("[REV] Section2 %.2lf s\n", timers->section2);
+
+  printf("[IO] Open %.2lf s\n", iop->open);
+  printf("[IO] Read %.2lf s\n", iop->read);
+  printf("[IO] Close %.2lf s\n", iop->close);
+
+  char name[100];
+  sprintf(name, "rev_disks_%d_threads_%d.csv", NDISKS, nthreads);
+
+  FILE *fpt;
+  fpt = fopen(name, "w");
+
+  fprintf(fpt,"Disks, Threads, Bytes, [REV] Section0, [REV] Section1, [REV] Section2, [IO] Open, [IO] Read, [IO] Close\n");
+
+  fprintf(fpt,"%d, %d, %ld, %.2lf, %.2lf, %.2lf, %.2lf, %.2lf, %.2lf\n", NDISKS, nthreads, read_size,
+        timers->section0, timers->section1, timers->section2, iop->open, iop->read, iop->close);
+
+  fclose(fpt);
+}
+
 int Gradient(struct dataobj *restrict damp_vec, const float dt, struct dataobj *restrict grad_vec, const float o_x, const float o_y, const float o_z, struct dataobj *restrict rec_vec, struct dataobj *restrict rec_coords_vec, struct dataobj *restrict u_vec, struct dataobj *restrict v_vec, struct dataobj *restrict vp_vec, const int x_M, const int x_m, const int y_M, const int y_m, const int z_M, const int z_m, const int p_rec_M, const int p_rec_m, const int time_M, const int time_m, const int x0_blk0_size, const int x1_blk0_size, const int y0_blk0_size, const int y1_blk0_size, MPI_Comm comm, struct neighborhood * nb, const int nthreads, const int nthreads_nonaffine, struct profiler * timers)
 {
   float (*restrict damp)[damp_vec->size[1]][damp_vec->size[2]] __attribute__ ((aligned (64))) = (float (*)[damp_vec->size[1]][damp_vec->size[2]]) damp_vec->data;
@@ -88,22 +140,23 @@ int Gradient(struct dataobj *restrict damp_vec, const float dt, struct dataobj *
   float r0 = 1.0F/(dt*dt);
   float r1 = 1.0F/dt;
 
-  double read_time = 0.0;
-  double file_time = 0.0;
+  struct io_profiler * iop = malloc(sizeof(struct io_profiler));
 
-  struct timeval start, end;
-  gettimeofday(&start, NULL);
-  printf("Using nthreads %d\n", nthreads);
+  iop->open = 0;
+  iop->read = 0;
+  iop->close = 0;
+
+  /* Begin open files Section */
+  START_TIMER(open)
 
   int *files = malloc(nthreads * sizeof(int));
-
   if (files == NULL)
   {
       printf("Error to alloc\n");
       exit(1);
   }
 
-  open_thread_files(files, nthreads, 4);
+  open_thread_files(files, nthreads);
 
   int *counters = malloc(nthreads * sizeof(int));
 
@@ -117,8 +170,8 @@ int Gradient(struct dataobj *restrict damp_vec, const float dt, struct dataobj *
     counters[i] = 1;
   }
 
-  gettimeofday(&end, NULL);
-  file_time += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+  STOP_TIMER(open, iop)
+  /* End open files section */
 
   size_t u_size = u_vec->size[2]*u_vec->size[3]*sizeof(float);
 
@@ -225,9 +278,8 @@ int Gradient(struct dataobj *restrict damp_vec, const float dt, struct dataobj *
     STOP_TIMER(section1,timers)
     /* End section1 */
 
-struct timeval start, end;
-    gettimeofday(&start, NULL);
-
+    /* Begin read section */
+    START_TIMER(read)
     #pragma omp parallel for schedule(static,1) num_threads(nthreads)
     for(int i= u_vec->size[1]-1;i>=0;i--)
     {
@@ -246,9 +298,8 @@ struct timeval start, end;
 
       counters[tid]++;
     }
-
-    gettimeofday(&end, NULL);
-    read_time += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+    STOP_TIMER(read, iop);
+    /* End read section */
 
     /* Begin section2 */
     START_TIMER(section2)
@@ -277,16 +328,21 @@ struct timeval start, end;
     /* End section2 */
   }
 
-  gettimeofday(&start, NULL);
+  /* Begin close section */
+  START_TIMER(close)
   for(int i=0; i < nthreads; i++){
     close(files[i]);
   }
-  gettimeofday(&end, NULL);
+  STOP_TIMER(close, iop)
+  /* End close section */
 
-  file_time += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+  long int read_size = (time_M - time_m+1) * u_vec->size[1] * u_size;
 
-  printf("Time to read all timesteps: %f\n", read_time);
-  printf("Time to manipulate all files: %f\n", file_time);
+  save(nthreads, timers, iop, read_size);
+
+  free(iop);
+  free(files);
+  free(counters);
 
   return 0;
 }
@@ -375,4 +431,4 @@ static void haloupdate0(struct dataobj *restrict a0_vec, MPI_Comm comm, struct n
 /* Backdoor edit at Thu Aug 25 17:37:12 2022*/
 /* Backdoor edit at Thu Aug 25 17:46:26 2022*/
 /* Backdoor edit at Thu Aug 25 17:46:26 2022*/
-/* Backdoor edit at Fri Aug 26 13:51:06 2022*/ 
+/* Backdoor edit at Fri Aug 26 13:51:06 2022*/

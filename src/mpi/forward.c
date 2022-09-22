@@ -4,6 +4,14 @@
 #define START_TIMER(S) struct timeval start_ ## S , end_ ## S ; gettimeofday(&start_ ## S , NULL);
 #define STOP_TIMER(S,T) gettimeofday(&end_ ## S, NULL); T->S += (double)(end_ ## S .tv_sec-start_ ## S.tv_sec)+(double)(end_ ## S .tv_usec-start_ ## S .tv_usec)/1000000;
 
+#ifndef NDISKS
+#define NDISKS 4
+#endif
+
+#ifndef DPS
+#define DPS 4
+#endif
+
 #include "stdlib.h"
 #include "math.h"
 #include "sys/time.h"
@@ -40,12 +48,19 @@ struct profiler
   double section2;
 } ;
 
+struct io_profiler
+{
+  double open;
+  double write;
+  double close;
+} ;
+
 static void sendrecvtxyz(struct dataobj *restrict a0_vec, const int buf_x_size, const int buf_y_size, const int buf_z_size, int ogtime, int ogx, int ogy, int ogz, int ostime, int osx, int osy, int osz, int fromrank, int torank, MPI_Comm comm, const int nthreads);
 static void gathertxyz(float *restrict buf0_vec, const int buf_x_size, const int buf_y_size, const int buf_z_size, struct dataobj *restrict a0_vec, int otime, int ox, int oy, int oz, const int nthreads);
 static void scattertxyz(float *restrict buf1_vec, const int buf_x_size, const int buf_y_size, const int buf_z_size, struct dataobj *restrict a0_vec, int otime, int ox, int oy, int oz, const int nthreads);
 static void haloupdate0(struct dataobj *restrict a0_vec, MPI_Comm comm, struct neighborhood * nb, int otime, const int nthreads);
 
-void open_thread_files(int *files, int nthreads, int ndisks)
+void open_thread_files(int *files, int nthreads)
 {
 
   for(int i=0; i < nthreads; i++)
@@ -54,10 +69,8 @@ void open_thread_files(int *files, int nthreads, int ndisks)
     int myrank;
     MPI_Comm_rank(MPI_COMM_WORLD, &myrank);
 
-    printf("Rank: %d\n", myrank);
-
-    int socket = (myrank % 2) * 4;
-    int nvme_id = socket + i % ndisks;
+    int socket = (myrank % 2) * DPS; // Disks per Socket
+    int nvme_id = socket + i % NDISKS;
     char name[100];
 
     sprintf(name, "data/nvme%d/socket_%d_thread_%d.data", nvme_id, myrank, i);
@@ -70,6 +83,44 @@ void open_thread_files(int *files, int nthreads, int ndisks)
     }
   }
 
+}
+
+void save(int nthreads, struct profiler * timers, struct io_profiler * iop, long int write_size)
+{
+
+  int myrank;
+  MPI_Comm_rank(MPI_COMM_WORLD, &myrank);
+
+  if (myrank != 0)
+  {
+    return;
+  }
+
+  printf(">>>>>>>>>>>>>> MPI FORWARD <<<<<<<<<<<<<<<<<\n");
+
+  printf("Threads %d\n", nthreads);
+  printf("Disks %d\n", NDISKS);
+
+  printf("[FWD] Section0 %.2lf s\n", timers->section0);
+  printf("[FWD] Section1 %.2lf s\n", timers->section1);
+  printf("[FWD] Section2 %.2lf s\n", timers->section2);
+
+  printf("[IO] Open %.2lf s\n", iop->open);
+  printf("[IO] Write %.2lf s\n", iop->write);
+  printf("[IO] Close %.2lf s\n", iop->close);
+
+  char name[100];
+  sprintf(name, "fwd_disks_%d_threads_%d.csv", NDISKS, nthreads);
+
+  FILE *fpt;
+  fpt = fopen(name, "w");
+
+  fprintf(fpt,"Disks, Threads, Bytes, [FWD] Section0, [FWD] Section1, [FWD] Section2, [IO] Open, [IO] Write, [IO] Close\n");
+
+  fprintf(fpt,"%d, %d, %ld, %.2lf, %.2lf, %.2lf, %.2lf, %.2lf, %.2lf\n", NDISKS, nthreads, write_size,
+        timers->section0, timers->section1, timers->section2, iop->open, iop->write, iop->close);
+
+  fclose(fpt);
 }
 
 int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, const float o_y, const float o_z, struct dataobj *restrict rec_vec, struct dataobj *restrict rec_coords_vec, struct dataobj *restrict src_vec, struct dataobj *restrict src_coords_vec, struct dataobj *restrict u_vec, struct dataobj *restrict vp_vec, const int x_M, const int x_m, const int y_M, const int y_m, const int z_M, const int z_m, const int p_rec_M, const int p_rec_m, const int p_src_M, const int p_src_m, const int time_M, const int time_m, const int x0_blk0_size, const int y0_blk0_size, MPI_Comm comm, struct neighborhood * nb, const int nthreads, const int nthreads_nonaffine, struct profiler * timers)
@@ -89,17 +140,25 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
   float r0 = 1.0F/(dt*dt);
   float r1 = 1.0F/dt;
 
-  printf("Using nthreads %d\n", nthreads);
+  struct io_profiler * iop = malloc(sizeof(struct io_profiler));
+
+  iop->open = 0;
+  iop->write = 0;
+  iop->close = 0;
+
+  /* Begin Open Files Section */
+  START_TIMER(open)
 
   int *files = malloc(nthreads * sizeof(int));
-
   if (files == NULL)
   {
       printf("Error to alloc\n");
       exit(1);
   }
+  open_thread_files(files, nthreads);
 
-  open_thread_files(files, nthreads, 4);
+  STOP_TIMER(open, iop)
+  /* End Open Files Section */
 
   size_t u_size = u_vec->size[2]*u_vec->size[3]*sizeof(float);
 
@@ -207,6 +266,7 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
     /* End section1 */
 
     /* Begin section2 */
+    START_TIMER(section2)
     #pragma omp parallel num_threads(nthreads_nonaffine)
     {
       int chunk_size = (int)(fmax(1, (1.0F/3.0F)*(p_rec_M - p_rec_m + 1)/nthreads_nonaffine));
@@ -261,10 +321,11 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
         rec[time][p_rec] = sum;
       }
     }
-
+    STOP_TIMER(section2,timers)
     /* End section2 */
-    START_TIMER(section2)
-    /* Begin section3 */
+
+    /* Begin write section */
+    START_TIMER(write)
     #pragma omp parallel for schedule(static,1)
     for(int i=0; i < u_vec->size[1];i++)
     {
@@ -275,12 +336,23 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
           exit(1);
       }
     }
-    STOP_TIMER(section2,timers)
+    STOP_TIMER(write, iop);
+    /* End write section */
   }
 
+  /* Begin close section */
+  START_TIMER(close)
   for(int i=0; i < nthreads; i++){
     close(files[i]);
   }
+  STOP_TIMER(close, iop)
+  /* End close section */
+
+  long int write_size = (time_M - time_m+1) * u_vec->size[1] * u_size;
+  save(nthreads, timers, iop, write_size);
+
+  free(iop);
+  free(files);
 
   return 0;
 }
@@ -365,8 +437,3 @@ static void haloupdate0(struct dataobj *restrict a0_vec, MPI_Comm comm, struct n
   sendrecvtxyz(a0_vec,a0_vec->npsize[1],a0_vec->npsize[2],a0_vec->hsize[7],otime,a0_vec->hofs[2],a0_vec->hofs[4],a0_vec->oofs[6],otime,a0_vec->hofs[2],a0_vec->hofs[4],a0_vec->hofs[7],nb->ccr,nb->ccl,comm,nthreads);
   sendrecvtxyz(a0_vec,a0_vec->npsize[1],a0_vec->npsize[2],a0_vec->hsize[6],otime,a0_vec->hofs[2],a0_vec->hofs[4],a0_vec->oofs[7],otime,a0_vec->hofs[2],a0_vec->hofs[4],a0_vec->hofs[6],nb->ccl,nb->ccr,comm,nthreads);
 }
-/* Backdoor edit at Thu Aug 11 12:56:02 2022*/
-/* Backdoor edit at Thu Aug 11 12:58:48 2022*/
-/* Backdoor edit at Thu Aug 11 13:00:17 2022*/
-/* Backdoor edit at Thu Aug 11 13:06:22 2022*/
-/* Backdoor edit at Fri Aug 26 13:50:13 2022*/ 
