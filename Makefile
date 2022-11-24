@@ -16,16 +16,6 @@ reverse: overthrust_3D_initial_model.h5 overthrust_experiment.py
 	DEVITO_LOGGING=DEBUG \
 	time numactl --cpubind=0  python overthrust_experiment.py --disks=$(DISK)
 
-rtm: rtm.py
-	DEVITO_OPT=advanced \
-	DEVITO_LANGUAGE=openmp \
-	DEVITO_PLATFORM=skx \
-	OMP_NUM_THREADS=26 \
-	OMP_PLACES="{0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25}" \
-	DEVITO_LOGGING=DEBUG \
-	TMPDIR=/home/ubuntu/overthrust-tests/RTM \
-	time numactl --cpubind=0  python rtm.py
-
 compression: overthrust_3D_initial_model.h5 overthrust_experiment.py
 	rm -rf data/nvme*/*
 	DEVITO_OPT=advanced \
