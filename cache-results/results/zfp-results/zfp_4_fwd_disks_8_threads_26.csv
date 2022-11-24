@@ -1,0 +1,2 @@
+Disks, Threads, Bytes, Rate, [FWD] Section0, [FWD] Section1, [FWD] Section2, [IO] Open, [IO] Write, [IO] Compress, [IO] Close
+8, 26, 65721062400, 4, 35.60, 0.05, 0.06, 0.00, 0.00, 16.96, 0.00
