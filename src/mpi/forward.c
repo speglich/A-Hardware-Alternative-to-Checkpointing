@@ -1,3 +1,6 @@
+#define _GNU_SOURCE
+#include "fcntl.h"
+
 #define _POSIX_C_SOURCE 200809L
 #define MIN(a,b) (((a) < (b)) ? (a) : (b))
 #define MAX(a,b) (((a) > (b)) ? (a) : (b))
@@ -21,7 +24,6 @@
 #include "omp.h"
 #include "stdio.h"
 #include "unistd.h"
-#include "fcntl.h"
 
 struct dataobj
 {
@@ -76,7 +78,7 @@ void open_thread_files(int *files, int nthreads)
     sprintf(name, "data/nvme%d/socket_%d_thread_%d.data", nvme_id, myrank, i);
     printf("Creating file %s\n", name);
 
-    if ((files[i] = open(name, O_WRONLY | O_CREAT | O_TRUNC,
+    if ((files[i] = open(name, O_DIRECT | O_WRONLY | O_CREAT ,
         S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) == -1)
     {
         perror("Cannot open output file\n"); exit(1);

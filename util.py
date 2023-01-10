@@ -9,6 +9,8 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa
 
+from skimage.transform import resize
+
 
 def from_hdf5(filename, **kwargs):
     f = h5py.File(filename, 'r')
@@ -28,6 +30,13 @@ def from_hdf5(filename, **kwargs):
     space_order = kwargs.pop('space_order', None)
     dtype = kwargs.pop('dtype', None)
     data_m = f[datakey][()]
+
+    print(np.shape(data_m))
+
+    data_m= resize(data_m, (212, 804,804))
+
+    print(np.shape(data_m))
+
     data_vp = np.sqrt(1/data_m).astype(dtype)
 
     if len(data_vp.shape) > 2:

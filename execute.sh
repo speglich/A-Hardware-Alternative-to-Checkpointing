@@ -1,8 +1,18 @@
 #!/bin/bash
 
+
 for disk in `seq 1 8`; do
-    make DISK=$disk
-    for rate in 2 4 8 16; do
-        make compression DISK=$disk RATE=$rate
-    done
+    make reverse DISK=$disk
 done
+
+mkdir -p results
+mv fwd_disks_* results
+mv rev_disks_* results
+
+for disk in `seq 1 4`; do
+    make reverse-mpi DISK=$disk
+done
+
+mkdir -p results-mpi
+mv fwd_disks_* results-mpi
+mv rev_disks_* results-mpi

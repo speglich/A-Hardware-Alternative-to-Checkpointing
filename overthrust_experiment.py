@@ -180,6 +180,9 @@ if __name__ == "__main__":
     parser.add_argument("--disks", default=8, type=int,
                         help="Number of PML layers around the domain")
 
+    parser.add_argument("--ram", default=False, action="store_true",
+                        help="Use MPI on experiments")
+
     args = parser.parse_args()
 
     class ZFPCompiler(GNUCompiler):
@@ -199,10 +202,11 @@ if __name__ == "__main__":
     configuration.add("compiler", "custom", list(compiler_registry), callback=lambda i: compiler_registry[i]())
     configuration['compiler'] = 'zfpcompile'
 
+    to_disk = not args.ram
     run(nbpml=args.nbpml,
         space_order=args.space_order,
         kernel=args.kernel,
         filename='overthrust_3D_initial_model.h5',
-        to_disk=True,
+        to_disk=to_disk,
         compression=args.compression,
         mpi=args.mpi)
