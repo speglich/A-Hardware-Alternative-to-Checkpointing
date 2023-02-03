@@ -1,13 +1,20 @@
 colon := :
 $(colon) := :
 
-all: overthrust_3D_initial_model.h5 container reverse
+all: overthrust_3D_initial_model.h5 reverse
 
 overthrust_3D_initial_model.h5:
 	wget ftp://slim.gatech.edu/data/SoftwareRelease/WaveformInversion.jl/3DFWI/overthrust_3D_initial_model.h5
 
 container:
 	docker build -t out-of-core -f Dockerfile .
+
+disks:
+	mkdir -p data
+	$(foreach n,  $(filter-out $(DISK), $(shell seq 0 $(DISK))), sudo umount /dev/nvme$(n)n1 || /bin/true;)
+	$(foreach n,  $(filter-out $(DISK), $(shell seq 0 $(DISK))), sudo mkfs -F -t ext4 /dev/nvme$(n)n1;)
+	$(foreach n,  $(filter-out $(DISK), $(shell seq 0 $(DISK))), mkdir -p data/nvme$(n);)
+	$(foreach n,  $(filter-out $(DISK), $(shell seq 0 $(DISK))), sudo mount -t auto /dev/nvme$(n)n1 data/nvme$(n);)
 
 reverse: overthrust_3D_initial_model.h5 overthrust_experiment.py
 	rm -rf data/nvme*/*
