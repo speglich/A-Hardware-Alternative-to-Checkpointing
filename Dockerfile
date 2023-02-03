@@ -44,4 +44,4 @@ RUN apt-get update -y && \
         python3-setuptools \
         python3-wheel && \
     rm -rf /var/lib/apt/lists/*
-RUN pip3 --no-cache-dir install mpi4py
+RUN pip3 --no-cache-dir install mpi4py h5py scikit-image matplotlib
