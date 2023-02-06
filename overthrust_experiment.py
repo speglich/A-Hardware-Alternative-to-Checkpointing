@@ -194,6 +194,9 @@ if __name__ == "__main__":
     parser.add_argument("--ram", default=False, action="store_true",
                         help="Use MPI on experiments")
 
+    parser.add_argument("--cache", default=False, action="store_true",
+                        help="Disable O_DIRECT on experiments")
+
     args = parser.parse_args()
 
     class ZFPCompiler(GNUCompiler):
@@ -202,7 +205,9 @@ if __name__ == "__main__":
             super(ZFPCompiler, self).__init__(*c_args, **kwargs)
 
             #self.libraries.append("zfp")
-
+            if args.cache:
+                d_cache = "CACHE=1"
+                self.defines.append(d_cache)
             d_ndisks = "NDISKS=%d" % args.disks
             d_rate = "RATE=%d" % args.rate
 

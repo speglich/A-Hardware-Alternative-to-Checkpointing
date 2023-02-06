@@ -15,6 +15,12 @@
 #define DPS 4
 #endif
 
+#ifdef CACHE
+#define OPEN_FLAGS O_WRONLY | O_CREAT
+#else
+#define OPEN_FLAGS O_DIRECT | O_WRONLY | O_CREAT
+#endif
+
 #include "stdlib.h"
 #include "math.h"
 #include "sys/time.h"
@@ -76,7 +82,7 @@ void open_thread_files(int *files, int nthreads)
     char name[100];
 
     sprintf(name, "data/nvme%d/socket_%d_thread_%d.data", nvme_id, myrank, i);
-    if ((files[i] = open(name, O_DIRECT | O_WRONLY | O_CREAT ,
+    if ((files[i] = open(name, OPEN_FLAGS ,
         S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) == -1)
     {
       char error[140];

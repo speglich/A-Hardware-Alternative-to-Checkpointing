@@ -11,6 +11,12 @@
 #define NDISKS 8
 #endif
 
+#ifdef CACHE
+#define OPEN_FLAGS O_WRONLY | O_CREAT
+#else
+#define OPEN_FLAGS O_DIRECT | O_WRONLY | O_CREAT
+#endif
+
 #include "stdlib.h"
 #include "math.h"
 #include "sys/time.h"
@@ -56,7 +62,7 @@ void open_thread_files(int *files, int nthreads)
     sprintf(name, "data/nvme%d/thread_%d.data", nvme_id, i);
     printf("Creating file %s\n", name);
 
-    if ((files[i] = open(name, O_DIRECT | O_WRONLY | O_CREAT,
+    if ((files[i] = open(name, OPEN_FLAGS ,
         S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) == -1)
     {
         perror("Cannot open output file\n"); exit(1);
