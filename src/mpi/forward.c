@@ -76,12 +76,14 @@ void open_thread_files(int *files, int nthreads)
     char name[100];
 
     sprintf(name, "data/nvme%d/socket_%d_thread_%d.data", nvme_id, myrank, i);
-    printf("Creating file %s\n", name);
-
     if ((files[i] = open(name, O_DIRECT | O_WRONLY | O_CREAT ,
         S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) == -1)
     {
-        perror("Cannot open output file\n"); exit(1);
+      char error[140];
+      sprintf(error, "Cannot open output %s!\n", name);
+      perror(error); exit(1);
+    } else {
+      printf("Creating file %s\n", name);
     }
   }
 
@@ -334,7 +336,7 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
       int tid = i%nthreads;
       int ret = write(files[tid], u[t0][i], u_size);
       if (ret != u_size) {
-          perror("Cannot open output file");
+          perror("Write size mismatch with u_size");
           exit(1);
       }
     }
