@@ -60,19 +60,17 @@ reverse-mpi: overthrust_3D_initial_model.h5 overthrust_experiment.py overthrust_
 	--network host \
 	-it out-of-core time mpirun --allow-run-as-root --map-by socket -np 2 python3 overthrust_experiment.py --mpi --disks=$(DISK)
 
-gradient: overthrust_3D_initial_model.h5 test_gradient.py
+gradient: overthrust_3D_initial_model.h5 gradient_experiment.py
 	rm -rf data/nvme*/*
 	sudo docker run \
 	-e DEVITO_OPT=advanced \
 	-e DEVITO_LANGUAGE=openmp \
 	-e DEVITO_PLATFORM=skx \
-	-e DEVITO_JIT_BACKDOOR=1 \
 	-e OMP_NUM_THREADS=26 \
 	-e OMP_PLACES="{0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25}" \
-	-e TMPDIR=/app/GRADIENT_C_DEVITO \
 	-e DEVITO_LOGGING=DEBUG \
 	-v $(PWD):/app \
-	-it out-of-core time numactl --cpubind=0  python3 test_gradient.py
+	-it out-of-core time numactl --cpubind=0  python3 gradient_experiment.py
 
 ram: overthrust_3D_initial_model.h5 overthrust_experiment.py
 	rm -rf data/nvme*/*
