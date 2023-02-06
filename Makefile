@@ -46,6 +46,7 @@ reverse: overthrust_3D_initial_model.h5 overthrust_experiment.py
 #	-v $(PWD):/app \
 #	-it out-of-core time numactl --cpubind=0  python3 overthrust_experiment.py --compression --rate=$(RATE) --disks=$(DISK)
 
+# Missing --bind-to socket
 reverse-mpi: overthrust_3D_initial_model.h5 overthrust_experiment.py overthrust_experiment.py
 	rm -rf data/nvme*/*
 	sudo docker run \
@@ -85,6 +86,7 @@ ram: overthrust_3D_initial_model.h5 overthrust_experiment.py
 	-v $(PWD):/app \
 	-it out-of-core time numactl --cpubind=0  python3 overthrust_experiment.py --ram
 
+# Missing --bind-to socket
 ram-mpi: overthrust_3D_initial_model.h5 overthrust_experiment.py overthrust_experiment.py
 	rm -rf data/nvme*/*
 	sudo docker run \
