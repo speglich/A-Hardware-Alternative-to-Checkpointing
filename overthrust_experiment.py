@@ -190,7 +190,7 @@ if __name__ == "__main__":
 
             super(ZFPCompiler, self).__init__(*c_args, **kwargs)
 
-            self.libraries.append("zfp")
+            #self.libraries.append("zfp")
 
             d_ndisks = "NDISKS=%d" % args.disks
             d_rate = "RATE=%d" % args.rate
