@@ -21,6 +21,8 @@ files = {
     'gradient-mpi' : 'src/mpi/gradient.c',
     'ram-forward' : 'src/ram/non-mpi/forward.c',
     'ram-gradient' : 'src/ram/non-mpi/gradient.c',
+    'ram-forward-mpi' : 'src/ram/mpi/forward.c',
+    'ram-gradient-mpi' : 'src/ram/mpi/gradient.c',
     }
 
 def operatorInjector(op, payload):
@@ -149,8 +151,12 @@ def run(space_order=4, kernel='OT4', nbpml=40, filename='', to_disk=True, compre
         fw_op = solver.op_fwd(save=True)
         rev_op = solver.op_grad(save=True)
 
-        operatorInjector(fw_op, files ['ram-forward'])
-        operatorInjector(rev_op, files ['ram-gradient'])
+        if mpi:
+            operatorInjector(fw_op, files ['ram-forward-mpi'])
+            operatorInjector(rev_op, files ['ram-gradient-mpi'])
+        else:
+            operatorInjector(fw_op, files ['ram-forward'])
+            operatorInjector(rev_op, files ['ram-gradient'])
 
     fw_op.apply(rec=rec, src=solver.geometry.src, u=u, dt=dt)
     rev_op.apply(u=u, dt=dt, rec=rec)
