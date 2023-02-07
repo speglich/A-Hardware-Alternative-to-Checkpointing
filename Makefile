@@ -7,7 +7,7 @@ overthrust_3D_initial_model.h5:
 	wget ftp://slim.gatech.edu/data/SoftwareRelease/WaveformInversion.jl/3DFWI/overthrust_3D_initial_model.h5
 
 container:
-	docker build -t out-of-core -f Dockerfile .
+	docker build -t out-of-core -f docker/Dockerfile .
 
 dummy-disks:
 	mkdir -p data
