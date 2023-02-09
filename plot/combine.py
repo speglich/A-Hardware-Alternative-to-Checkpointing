@@ -4,8 +4,8 @@ import pandas as pd
 
 extension = 'csv'
 
-results = {'reverse' : 'results/reverse',
-            'forward' : 'results/forward'}
+results = {'reverse' : '/app/test/results/reverse',
+            'forward' : '/app/test/results/forward'}
 
 # MPI
 #results = {'reverse' : 'results-mpi/reverse',
