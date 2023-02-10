@@ -60,7 +60,7 @@ experiments = {
 
 
 # Environment
-def create_dirs(output, experiment):
+def create_dirs(output, experiment, mode):
 
     png_folder = os.path.join(output, "png")
     tex_folder = os.path.join(output, "latex")
@@ -71,17 +71,14 @@ def create_dirs(output, experiment):
     if not os.path.exists(tex_folder):
         os.makedirs(tex_folder)
 
-    modes = ['forward', 'adjoint']
+    png_exp_dir = os.path.join(png_folder, experiment['dir'], mode)
+    tex_exp_dir = os.path.join(tex_folder, os.path.join(experiment['dir'], mode))
 
-    for mode in modes:
-        png_exp_dir = os.path.join(png_folder, experiment['dir'], mode)
-        tex_exp_dir = os.path.join(tex_folder, os.path.join(experiment['dir'], mode))
+    if not os.path.exists(png_exp_dir):
+        os.makedirs(png_exp_dir)
 
-        if not os.path.exists(png_exp_dir):
-            os.makedirs(png_exp_dir)
-
-        if not os.path.exists(tex_exp_dir):
-            os.makedirs(tex_exp_dir)
+    if not os.path.exists(tex_exp_dir):
+        os.makedirs(tex_exp_dir)
 
     return png_folder, tex_folder
 
@@ -344,7 +341,7 @@ def plot_results(path, output):
             if dfs[mode] is None:
                 continue
 
-            png_folder, tex_folder = create_dirs(output, experiments[e])
+            png_folder, tex_folder = create_dirs(output, experiments[e], mode)
 
             plot_args = {}
 
