@@ -16,7 +16,6 @@ dirs = {'1SOCKET-FWD' : '1SOCKET/forward/',
         '1SOCKET-CACHE-REV' : '1SOCKET/CACHE/reverse',
         '2SOCKET-CACHE-REV' : '2SOCKET/CACHE/reverse'}
 
-
 def create_dirs(output):
 
     png_folder = os.path.join(output, "figures")
@@ -62,64 +61,157 @@ def compute_foward_attributes(df):
 
     return fwd
 
-def execution_time(exec_time, title, operator, png_folder, tex_folder, output,  ram=None):
+def plot(df, ram=None, **plot_args):
 
-    experiment = "Execution Time [s]"
-
-    ax = exec_time.plot.bar(stacked=True, grid=True)
+    ax = df.plot.bar(stacked=True, grid=True)
 
     if ram:
         ax.axhline(y=ram, color='r', linestyle='--', label="RAM Execution Time")
 
-    ax.set_ylabel('Time [s]')
-    ax.set_xlabel('Number of disks')
+    ax_label = plot_args['ax_label']
+    ay_label = plot_args['ay_label']
+    ax.set_ylabel(ax_label)
+    ax.set_xlabel(ay_label)
 
+    title = plot_args ['title']
+    operator = plot_args['operator']
+    experiment = plot_args['experiment']
     ax.set_title(title + ' - ' + operator + ' - ' + experiment)
 
-    labels = list(exec_time.index.values)
+    labels = list(df.index.values)
     ax.set_xticklabels(labels, rotation=0)
 
     ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
 
+    output = plot_args['output']
+
+    png_folder= plot_args['png_folder']
     png = png_folder + "/" + output + ".png"
+
+    tex_folder = plot_args['tex_folder']
     tex = tex_folder + "/" + output + ".tex"
 
     plt.savefig(png, dpi=350, bbox_inches='tight')
     tikzplotlib.save(tex)
 
-def plot_forward(dfs, png_folder,  tex_folder):
+def plot_time(df, ram=None, **plot_args):
 
-    print(dfs)
+    plot_args['ax_label'] = "Number of disks"
+    plot_args['ay_label'] = "Time [s]"
 
-    results = {'1SOCKET-FWD': {
+    plot(df, ram, **plot_args)
+
+def plot_throughtput(df, **plot_args):
+
+    plot_args['ax_label'] = "Number of disks"
+    plot_args['ay_label'] = 'Throughput [GB/s]'
+
+    plot(df, **plot_args)
+
+def plot_ratio(df, **plot_args):
+
+    plot_args['ax_label'] = "Number of disks"
+    plot_args['ay_label'] = 'Ratio'
+
+    plot(df, ram=1, **plot_args)
+
+def plot_fwd_exec_time(df, labels, **plot_args):
+
+    plot_args['title'] = labels['title']
+    plot_args['experiment'] =  "Execution Time [s]"
+    plot_args['output'] = labels['output'].format('exec-time')
+
+    exec_time = df[["Forward Propagation Time", "Write Time"]]
+    ram = exec_time._get_value(0, "Forward Propagation Time")
+    exec_time = exec_time.drop(index=(0))
+
+    plot_time(exec_time, ram, **plot_args)
+
+def plot_write_time(df, labels, **plot_args):
+
+    plot_args['experiment'] = "Write Time [s]"
+    plot_args['title'] = labels['title']
+    plot_args['output'] =  labels['output'].format("write-time")
+
+    write_time = df[['Write Time']]
+    write_time = write_time.drop(index=(0))
+
+    plot_time(write_time, **plot_args)
+
+def plot_write_troughput(df, labels, **plot_args):
+
+    plot_args['experiment'] = "Write Troughput [GB/s]"
+    plot_args['title'] = labels['title']
+    plot_args['output'] =  labels['output'].format("write-troughput")
+
+    throughput = df[['Write Troughput']]
+    throughput = throughput.drop(index=(0))
+
+    plot_throughtput(throughput, **plot_args)
+
+def plot_write_troughput_per_disk(df, labels, **plot_args):
+
+    plot_args['experiment'] = "Write Troughput per disk [GB/s]"
+    plot_args['title'] = labels['title']
+    plot_args['output'] =  labels['output'].format("write-troughput-per-disk")
+
+    throughput = df[['Write Troughput per disk']]
+    throughput = throughput.drop(index=(0))
+
+    plot_throughtput(throughput, **plot_args)
+
+def plot_write_compute_ratio(df, labels, **plot_args):
+
+    plot_args['experiment'] = "Write Time / Compute Time Ratio"
+    plot_args['title'] = labels['title']
+    plot_args['output'] =  labels['output'].format("write-ratio")
+
+    ratio = df[['Ratio']]
+    ratio = ratio.drop(index=(0))
+
+    plot_ratio(ratio, **plot_args)
+
+def plot_forward(dfs, **plot_args):
+
+    labels = {'1SOCKET-FWD': {
                     'title' : '1 Socket - 26 Physical Cores',
-                    'output' : 'fwd-exec-time'},
+                    'output' : 'fwd-{}'},
                '2SOCKET-FWD': {
                     'title' : 'MPI - 2 Sockets - 52 Physical Cores',
-                    'output' : 'mpi-fwd-exec-time'},
+                    'output' : 'mpi-fwd-{}'},
                '1SOCKET-CACHE-FWD': {
                     'title' : '1 Socket - 26 Physical Cores - Cache ON',
-                    'output' : 'cache-fwd-exec-time'},
+                    'output' : 'cache-fwd-{}'},
                '2SOCKET-CACHE-FWD': {
                     'title' : 'MPI - 2 Sockets - 52 Physical Cores - Cache ON',
-                    'output' : 'cache-mpi-fwd-exec-time'}}
+                    'output' : 'mpi-cache-fwd{}'}}
 
-    operator = "Forward Propagation"
+    plot_args['operator'] = "Forward Propagation"
 
-    for r in results:
 
-        if dfs[r] is None:
+    for l in labels:
+
+        if dfs[l] is None:
             continue
 
-        df =  compute_foward_attributes(dfs[r])
+        # Data Manipulation
+        df = compute_foward_attributes(dfs[l])
 
-        exec_time = df[["Forward Propagation Time", "Write Time"]]
+        # Execution time
+        plot_fwd_exec_time(df, labels[l], **plot_args)
 
-        ram = exec_time._get_value(0, "Forward Propagation Time")
+        # Write time
+        plot_write_time(df, labels[l], **plot_args)
 
-        exec_time = exec_time.drop(index=(0))
+        # Write Throughput
+        plot_write_troughput(df, labels[l], **plot_args)
 
-        execution_time(exec_time, results[r]['title'], operator, png_folder, tex_folder, results[r]['output'],  ram)
+        # Write Throughput per disk
+        plot_write_troughput_per_disk(df, labels[l], **plot_args)
+
+        #Ratio
+        plot_write_compute_ratio(df, labels[l], **plot_args)
+
 
 if __name__ == '__main__':
 
@@ -139,4 +231,9 @@ if __name__ == '__main__':
 
     png_folder, tex_folder = create_dirs(args.output)
 
-    plot_forward(dfs, png_folder, tex_folder)
+    plot_args = {}
+
+    plot_args['png_folder'] = png_folder
+    plot_args['tex_folder'] = tex_folder
+
+    plot_forward(dfs, **plot_args)
