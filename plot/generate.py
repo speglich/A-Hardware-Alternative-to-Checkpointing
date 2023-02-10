@@ -7,19 +7,59 @@ import tikzplotlib
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import figure
 
-dirs = {'1SOCKET-FWD' : '1SOCKET/forward/',
-        '2SOCKET-FWD' : '2SOCKET/forward/',
-        '1SOCKET-CACHE-FWD' : '1SOCKET/CACHE/forward/',
-        '2SOCKET-CACHE-FWD' : '2SOCKET/CACHE/forward/',
-        '1SOCKET-REV' : '1SOCKET/reverse',
-        '2SOCKET-REV' : '2SOCKET/reverse',
-        '1SOCKET-CACHE-REV' : '1SOCKET/CACHE/reverse',
-        '2SOCKET-CACHE-REV' : '2SOCKET/CACHE/reverse'}
+experiments = {
+        '1SOCKET': {
+            'title' : '1 Socket - 26 Physical Cores',
+            'dir': '1SOCKET',
+            'forward': {
+                'output' : '1SOCKET/forward/{}',
+                'path' : '1SOCKET/forward',
+            },
+            'adjoint': {
+                'output' : '1SOCKET/adjoint/{}',
+                'path' : '1SOCKET/adjoint',
+            },
+            },
+        '2SOCKET': {
+            'title' : 'MPI 2 Sockets - 52 Physical Cores',
+            'dir': '2SOCKET',
+            'forward': {
+                'output' : '2SOCKET/forward/{}',
+                'path' : '2SOCKET/forward'
+            },
+            'adjoint': {
+                'output' : '2SOCKET/adjoint/{}',
+                'path' : '2SOCKET/adjoint'
+            }},
+        '1SOCKET-CACHE': {
+            'title' : 'Cache - 1 Socket - 26 Physical Cores',
+            'dir': '1SOCKET/cache/',
+            'forward': {
+                'output' : '1SOCKET/cache/forward/{}',
+                'path' : '1SOCKET/cache/forward',
+            },
+            'adjoint': {
+                'output' : '1SOCKET/cache/adjoint/{}',
+                'path' : '1SOCKET/cache/adjoint',
+            },
+            },
+        '2SOCKET-CACHE': {
+            'title' : 'Cache - MPI 2 Sockets - 52 Physical Cores',
+            'dir': '2SOCKET/cache/',
+            'forward': {
+                'output' : '2SOCKET/cache/forward/{}',
+                'path' : '2SOCKET/cache/forward/'
+            },
+            'adjoint': {
+                'output' : '2SOCKET/cache/adjoint/{}',
+                'path' : '2SOCKET/cache/adjoint'
+            }}
+            }
 
-def create_dirs(output):
+def create_dirs(output, experiment):
 
-    png_folder = os.path.join(output, "figures")
-    tex_folder = os.path.join(output, "figures-tex")
+    png_folder = os.path.join(output, "png")
+    tex_folder = os.path.join(output, "latex")
 
     if not os.path.exists(png_folder):
         os.makedirs(png_folder)
@@ -27,20 +67,35 @@ def create_dirs(output):
     if not os.path.exists(tex_folder):
         os.makedirs(tex_folder)
 
+    modes = ['forward', 'adjoint']
+
+    for mode in modes:
+        png_exp_dir = os.path.join(png_folder, experiment['dir'], mode)
+        tex_exp_dir = os.path.join(tex_folder, os.path.join(experiment['dir'], mode))
+
+        if not os.path.exists(png_exp_dir):
+            os.makedirs(png_exp_dir)
+
+        if not os.path.exists(tex_exp_dir):
+            os.makedirs(tex_exp_dir)
+
     return png_folder, tex_folder
 
-def open(path):
+def open(path, experiment):
+
+    modes = ['forward', 'adjoint']
 
     dfs = {}
-    for d in dirs:
-        directory = os.path.join(path, dirs[d])
-        print(directory)
+
+    for mode in modes:
+        directory = os.path.join(path, experiment[mode]['path'])
         if os.path.isdir(directory):
+            print(directory)
             all_filenames = [i for i in glob.glob('{}/*.{}'.format(directory, 'csv'))]
             df = pd.concat([pd.read_csv(f) for f in all_filenames ])
-            dfs[d] = df
+            dfs[mode] = df
         else:
-            dfs[d] = None
+            dfs[mode] = None
 
     return dfs
 
@@ -119,7 +174,7 @@ def plot_fwd_exec_time(df, labels, **plot_args):
 
     plot_args['title'] = labels['title']
     plot_args['experiment'] =  "Execution Time [s]"
-    plot_args['output'] = labels['output'].format('exec-time')
+    plot_args['output'] = labels['forward']['output'].format('exec-time')
 
     exec_time = df[["Forward Propagation Time", "Write Time"]]
     ram = exec_time._get_value(0, "Forward Propagation Time")
@@ -131,7 +186,7 @@ def plot_write_time(df, labels, **plot_args):
 
     plot_args['experiment'] = "Write Time [s]"
     plot_args['title'] = labels['title']
-    plot_args['output'] =  labels['output'].format("write-time")
+    plot_args['output'] =  labels['forward']['output'].format("write-time")
 
     write_time = df[['Write Time']]
     write_time = write_time.drop(index=(0))
@@ -142,7 +197,7 @@ def plot_write_troughput(df, labels, **plot_args):
 
     plot_args['experiment'] = "Write Troughput [GB/s]"
     plot_args['title'] = labels['title']
-    plot_args['output'] =  labels['output'].format("write-troughput")
+    plot_args['output'] =  labels['forward']['output'].format("write-troughput")
 
     throughput = df[['Write Troughput']]
     throughput = throughput.drop(index=(0))
@@ -153,7 +208,7 @@ def plot_write_troughput_per_disk(df, labels, **plot_args):
 
     plot_args['experiment'] = "Write Troughput per disk [GB/s]"
     plot_args['title'] = labels['title']
-    plot_args['output'] =  labels['output'].format("write-troughput-per-disk")
+    plot_args['output'] =  labels['forward']['output'].format("write-troughput-per-disk")
 
     throughput = df[['Write Troughput per disk']]
     throughput = throughput.drop(index=(0))
@@ -164,54 +219,54 @@ def plot_write_compute_ratio(df, labels, **plot_args):
 
     plot_args['experiment'] = "Write Time / Compute Time Ratio"
     plot_args['title'] = labels['title']
-    plot_args['output'] =  labels['output'].format("write-ratio")
+    plot_args['output'] =  labels['forward']['output'].format("write-ratio")
 
     ratio = df[['Ratio']]
     ratio = ratio.drop(index=(0))
 
     plot_ratio(ratio, **plot_args)
 
-def plot_forward(dfs, **plot_args):
-
-    labels = {'1SOCKET-FWD': {
-                    'title' : '1 Socket - 26 Physical Cores',
-                    'output' : 'fwd-{}'},
-               '2SOCKET-FWD': {
-                    'title' : 'MPI - 2 Sockets - 52 Physical Cores',
-                    'output' : 'mpi-fwd-{}'},
-               '1SOCKET-CACHE-FWD': {
-                    'title' : '1 Socket - 26 Physical Cores - Cache ON',
-                    'output' : 'cache-fwd-{}'},
-               '2SOCKET-CACHE-FWD': {
-                    'title' : 'MPI - 2 Sockets - 52 Physical Cores - Cache ON',
-                    'output' : 'mpi-cache-fwd{}'}}
+def plot_forward_results(df, label, **plot_args):
 
     plot_args['operator'] = "Forward Propagation"
 
+    # Data Manipulation
+    df = compute_foward_attributes(df)
 
-    for l in labels:
+    # Execution time
+    plot_fwd_exec_time(df, label, **plot_args)
 
-        if dfs[l] is None:
-            continue
+    # Write time
+    plot_write_time(df, label, **plot_args)
 
-        # Data Manipulation
-        df = compute_foward_attributes(dfs[l])
+    # Write Throughput
+    plot_write_troughput(df, label, **plot_args)
 
-        # Execution time
-        plot_fwd_exec_time(df, labels[l], **plot_args)
+    # Write Throughput per disk
+    plot_write_troughput_per_disk(df, label, **plot_args)
 
-        # Write time
-        plot_write_time(df, labels[l], **plot_args)
+    #Ratio
+    plot_write_compute_ratio(df, label, **plot_args)
 
-        # Write Throughput
-        plot_write_troughput(df, labels[l], **plot_args)
+def plot_results(path, output):
 
-        # Write Throughput per disk
-        plot_write_troughput_per_disk(df, labels[l], **plot_args)
+    for e in experiments:
 
-        #Ratio
-        plot_write_compute_ratio(df, labels[l], **plot_args)
+        dfs = open(path, experiments[e])
+        for mode in dfs:
 
+            if dfs[mode] is None:
+                continue
+
+            png_folder, tex_folder = create_dirs(output, experiments[e])
+
+            plot_args = {}
+
+            plot_args['png_folder'] = png_folder
+            plot_args['tex_folder'] = tex_folder
+
+            if mode == 'forward':
+                plot_forward_results(dfs[mode], experiments[e], **plot_args)
 
 if __name__ == '__main__':
 
@@ -227,13 +282,4 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    dfs = open(args.path)
-
-    png_folder, tex_folder = create_dirs(args.output)
-
-    plot_args = {}
-
-    plot_args['png_folder'] = png_folder
-    plot_args['tex_folder'] = tex_folder
-
-    plot_forward(dfs, **plot_args)
+    plot_results(args.path, args.output)
