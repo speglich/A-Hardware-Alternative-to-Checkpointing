@@ -8,52 +8,80 @@ import matplotlib.pyplot as plt
 from matplotlib.pyplot import figure
 
 # Experiments configurations
-
 experiments = {
         '1SOCKET': {
             'title' : '1 Socket - 26 Physical Cores',
             'dir': '1SOCKET',
-            'forward': {
-                'output' : '1SOCKET/forward/{}',
-                'path' : '1SOCKET/forward',
-            },
-            'adjoint': {
-                'output' : '1SOCKET/adjoint/{}',
-                'path' : '1SOCKET/adjoint',
-            }},
+            'plots':{
+                'forward': {
+                    'output' : '1SOCKET/forward/{}',
+                    'files' : {'forward' : '1SOCKET/forward'},
+                },
+                'adjoint': {
+                    'output' : '1SOCKET/adjoint/{}',
+                    'files' : {'adjoint' : '1SOCKET/adjoint'},
+                },
+                'total': {
+                    'output' : '1SOCKET/total/{}',
+                    'files' : {'forward' : '1SOCKET/forward', 'adjoint' : '1SOCKET/adjoint'},
+                }
+            }
+        },
         '2SOCKET': {
             'title' : 'MPI 2 Sockets - 52 Physical Cores',
-            'dir': '2SOCKET',
-            'forward': {
-                'output' : '2SOCKET/forward/{}',
-                'path' : '2SOCKET/forward'
+            'dir' : '2SOCKET',
+            'plots' : {
+                'forward': {
+                    'output' : '2SOCKET/forward/{}',
+                    'files' : {'forward' : '2SOCKET/forward'},
+                },
+                'adjoint': {
+                    'output' : '2SOCKET/adjoint/{}',
+                    'files' : {'adjoint' : '2SOCKET/adjoint'},
+                },
+                'total': {
+                    'output' : '2SOCKET/total/{}',
+                    'files' : {'forward' : '2SOCKET/forward', 'adjoint' : '2SOCKET/adjoint'},
+                },
             },
-            'adjoint': {
-                'output' : '2SOCKET/adjoint/{}',
-                'path' : '2SOCKET/adjoint'
-            }},
+        },
         '1SOCKET-CACHE': {
             'title' : 'Cache - 1 Socket - 26 Physical Cores',
-            'dir': '1SOCKET/cache/',
-            'forward': {
-                'output' : '1SOCKET/cache/forward/{}',
-                'path' : '1SOCKET/cache/forward',
+            'dir' : '1SOCKET/cache/',
+            'plots' : {
+                'forward': {
+                    'output' : '1SOCKET/cache/forward/{}',
+                    'files' : {'forward' : '1SOCKET/cache/forward'},
+                },
+                'adjoint': {
+                    'output' : '1SOCKET/cache/adjoint/{}',
+                    'files' : {'adjoint' : '1SOCKET/cache/adjoint'},
+                },
+                'total': {
+                    'output' : '1SOCKET/total/{}',
+                    'files' : {'forward' : '1SOCKET/cache/forward', 'adjoint' : '1SOCKET/cache/adjoint'},
+                },
             },
-            'adjoint': {
-                'output' : '1SOCKET/cache/adjoint/{}',
-                'path' : '1SOCKET/cache/adjoint',
-            }},
+        },
         '2SOCKET-CACHE': {
             'title' : 'Cache - MPI 2 Sockets - 52 Physical Cores',
             'dir': '2SOCKET/cache/',
-            'forward': {
-                'output' : '2SOCKET/cache/forward/{}',
-                'path' : '2SOCKET/cache/forward/'
+            'plots': {
+                'forward': {
+                    'output' : '2SOCKET/cache/forward/{}',
+                    'files' : {'forward' : '2SOCKET/cache/forward/'}
+                },
+                'adjoint': {
+                    'output' : '2SOCKET/cache/adjoint/{}',
+                    'files' : {'adjoint' :'2SOCKET/cache/adjoint'}
+                },
+                'total': {
+                    'output' : '2SOCKET/total/{}',
+                    'files' : {'forward' : '2SOCKET/cache/forward', 'adjoint' : '2SOCKET/cache/adjoint'},
+                },
             },
-            'adjoint': {
-                'output' : '2SOCKET/cache/adjoint/{}',
-                'path' : '2SOCKET/cache/adjoint'
-            }}}
+        },
+    }
 
 # Environment
 def create_dirs(output, experiment, mode):
@@ -78,23 +106,28 @@ def create_dirs(output, experiment, mode):
 
     return png_folder, tex_folder
 
-def open(path, experiment):
+def open(root, experiment):
 
-    modes = ['forward', 'adjoint']
+    total = {}
 
-    dfs = {}
+    for plot in experiment['plots']:
+        dfs = {}
+        for path in experiment['plots'][plot]['files']:
+            directory = os.path.join(root, experiment['plots'][plot]['files'][path])
+            if os.path.isdir(directory):
+                print(experiment['title'], plot, path)
+                all_filenames = [i for i in glob.glob('{}/*.{}'.format(directory, 'csv'))]
+                df = pd.concat([pd.read_csv(f) for f in all_filenames ])
+                dfs[path] = df
+            else:
+                dfs[path] = None
 
-    for mode in modes:
-        directory = os.path.join(path, experiment[mode]['path'])
-        if os.path.isdir(directory):
-            print(directory)
-            all_filenames = [i for i in glob.glob('{}/*.{}'.format(directory, 'csv'))]
-            df = pd.concat([pd.read_csv(f) for f in all_filenames ])
-            dfs[mode] = df
+        if any(df is None for df in dfs.values()):
+            total[plot] = None
         else:
-            dfs[mode] = None
+            total[plot] = dfs
 
-    return dfs
+    return total
 
 # Data Manipulation
 def compute_foward_attributes(df):
@@ -189,7 +222,7 @@ def plot_fwd_exec_time(df, labels, **plot_args):
 
     plot_args['title'] = labels['title']
     plot_args['experiment'] =  "Execution Time [s]"
-    plot_args['output'] = labels['forward']['output'].format('exec-time')
+    plot_args['output'] = labels['plots']['forward']['output'].format('exec-time')
 
     exec_time = df[["Forward Propagation Time", "Write Time"]]
     ram = exec_time._get_value(0, "Forward Propagation Time")
@@ -201,7 +234,7 @@ def plot_write_time(df, labels, **plot_args):
 
     plot_args['experiment'] = "Write Time [s]"
     plot_args['title'] = labels['title']
-    plot_args['output'] =  labels['forward']['output'].format("write-time")
+    plot_args['output'] =  labels['plots']['forward']['output'].format("write-time")
 
     write_time = df[['Write Time']]
     write_time = write_time.drop(index=(0))
@@ -212,7 +245,7 @@ def plot_write_troughput(df, labels, **plot_args):
 
     plot_args['experiment'] = "Write Troughput [GB/s]"
     plot_args['title'] = labels['title']
-    plot_args['output'] =  labels['forward']['output'].format("write-troughput")
+    plot_args['output'] =  labels['plots']['forward']['output'].format("write-troughput")
 
     throughput = df[['Write Troughput']]
     throughput = throughput.drop(index=(0))
@@ -223,7 +256,7 @@ def plot_write_troughput_per_disk(df, labels, **plot_args):
 
     plot_args['experiment'] = "Write Troughput per disk [GB/s]"
     plot_args['title'] = labels['title']
-    plot_args['output'] =  labels['forward']['output'].format("write-troughput-per-disk")
+    plot_args['output'] =  labels['plots']['forward']['output'].format("write-troughput-per-disk")
 
     throughput = df[['Write Troughput per disk']]
     throughput = throughput.drop(index=(0))
@@ -234,7 +267,7 @@ def plot_write_compute_ratio(df, labels, **plot_args):
 
     plot_args['experiment'] = "Write Time / Compute Time Ratio"
     plot_args['title'] = labels['title']
-    plot_args['output'] =  labels['forward']['output'].format("write-ratio")
+    plot_args['output'] =  labels['plots']['forward']['output'].format("write-ratio")
 
     ratio = df[['Ratio']]
     ratio = ratio.drop(index=(0))
@@ -245,7 +278,7 @@ def plot_read_troughput_per_disk(df, labels, **plot_args):
 
     plot_args['experiment'] = "Read Troughput per disk [GB/s]"
     plot_args['title'] = labels['title']
-    plot_args['output'] =  labels['adjoint']['output'].format("read-troughput-per-disk")
+    plot_args['output'] =  labels['plots']['adjoint']['output'].format("read-troughput-per-disk")
 
     throughput = df[['Read Troughput per disk']]
     throughput = throughput.drop(index=(0))
@@ -256,7 +289,7 @@ def plot_read_troughput(df, labels, **plot_args):
 
     plot_args['experiment'] = "Read Troughput [GB/s]"
     plot_args['title'] = labels['title']
-    plot_args['output'] =  labels['adjoint']['output'].format("read-troughput")
+    plot_args['output'] =  labels['plots']['adjoint']['output'].format("read-troughput")
 
     throughput = df[['Read Troughput']]
     throughput = throughput.drop(index=(0))
@@ -267,7 +300,7 @@ def plot_read_time(df, labels, **plot_args):
 
     plot_args['experiment'] = "Read Time [s]"
     plot_args['title'] = labels['title']
-    plot_args['output'] =  labels['adjoint']['output'].format("read-time")
+    plot_args['output'] =  labels['plots']['adjoint']['output'].format("read-time")
 
     read_time = df[['Read Time']]
     read_time = read_time.drop(index=(0))
@@ -278,7 +311,7 @@ def plot_adjoint_exec_time(df, labels, **plot_args):
 
     plot_args['title'] = labels['title']
     plot_args['experiment'] =  "Execution Time [s]"
-    plot_args['output'] = labels['adjoint']['output'].format('exec-time')
+    plot_args['output'] = labels['plots']['adjoint']['output'].format('exec-time')
 
     exec_time = df[["Adjoint Calculation Time", "Read Time"]]
     ram = exec_time._get_value(0, "Adjoint Calculation Time")
@@ -291,7 +324,7 @@ def plot_adjoint_results(df, label, **plot_args):
     plot_args['operator'] = "Adjoint Calculation"
 
     # Data manipulation
-    df = compute_adjoint_attributes(df)
+    df = compute_adjoint_attributes(df['adjoint'])
 
     # Execution time
     plot_adjoint_exec_time(df,label, **plot_args)
@@ -310,7 +343,7 @@ def plot_forward_results(df, label, **plot_args):
     plot_args['operator'] = "Forward Propagation"
 
     # Data Manipulation
-    df = compute_foward_attributes(df)
+    df = compute_foward_attributes(df['forward'])
 
     # Execution time
     plot_fwd_exec_time(df, label, **plot_args)
@@ -327,11 +360,22 @@ def plot_forward_results(df, label, **plot_args):
     #Ratio
     plot_write_compute_ratio(df, label, **plot_args)
 
+def plot_total(df, label, **plot_args):
+
+    return
+
 def plot_results(path, output):
+
+    plot_functions = {
+                    'forward' : plot_forward_results,
+                    'adjoint' : plot_adjoint_results,
+                    'total' : plot_total,
+                    }
 
     for e in experiments:
 
         dfs = open(path, experiments[e])
+
         for mode in dfs:
 
             if dfs[mode] is None:
@@ -340,17 +384,11 @@ def plot_results(path, output):
             png_folder, tex_folder = create_dirs(output, experiments[e], mode)
 
             plot_args = {}
-
             plot_args['png_folder'] = png_folder
             plot_args['tex_folder'] = tex_folder
 
-            if mode == 'forward':
-                plot_forward_results(dfs[mode], experiments[e], **plot_args)
-            elif mode == 'adjoint':
-                plot_adjoint_results(dfs[mode], experiments[e], **plot_args)
-            else:
-                print('Invalid mode:', mode)
-                continue
+            plot_functions[mode](dfs[mode], experiments[e], **plot_args)
+
 
 if __name__ == '__main__':
 
