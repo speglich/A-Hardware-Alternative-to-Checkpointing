@@ -163,6 +163,15 @@ def compute_adjoint_attributes(df):
 
     return rev
 
+def compute_total_attributes(fwd_df, adj_df):
+
+    fwd_exec_time = fwd_df[["Forward Propagation Time", "Write Time"]]
+    adj_exec_time = adj_df[["Adjoint Calculation Time", "Read Time"]]
+    total = pd.concat([fwd_exec_time, adj_exec_time], axis=1)
+    total = total[["Forward Propagation Time", "Adjoint Calculation Time", "Write Time", "Read Time"]]
+
+    return total
+
 # Plot
 def plot(df, reference=None, **plot_args):
 
@@ -196,6 +205,7 @@ def plot(df, reference=None, **plot_args):
 
     plt.savefig(png, dpi=350, bbox_inches='tight')
     tikzplotlib.save(tex)
+    plt.close()
 
 def plot_time(df, reference=None, **plot_args):
 
@@ -319,7 +329,35 @@ def plot_adjoint_exec_time(df, labels, **plot_args):
 
     plot_time(exec_time, ram, **plot_args)
 
-def plot_adjoint_results(df, label, **plot_args):
+def plot_total_exec_time(df, labels, **plot_args):
+
+    plot_args['title'] = labels['title']
+    plot_args['experiment'] =  "Execution Time [s]"
+    plot_args['output'] = labels['plots']['total']['output'].format('exec-time')
+
+    ram = df._get_value(0, "Adjoint Calculation Time") + df._get_value(0, "Forward Propagation Time")
+    df = df.drop(index=(0))
+
+    plot_time(df, ram, **plot_args)
+
+def plot_total_slowdown(df, labels, **plot_args):
+
+    plot_args['title'] = labels['title']
+    plot_args['experiment'] =  "Performance Impact"
+    plot_args['output'] = labels['plots']['total']['output'].format('slowdown')
+
+    df["Total"] = df["Forward Propagation Time"] + df["Adjoint Calculation Time"] \
+                + df["Write Time"] + df["Read Time"]
+
+    ram_time = df._get_value(0, "Total")
+
+    df = df.drop(index=(0))
+
+    ratio = df[["Total"]] / ram_time
+
+    plot_ratio(ratio, **plot_args)
+
+def plot_adjoint_results(df, labels, **plot_args):
 
     plot_args['operator'] = "Adjoint Calculation"
 
@@ -327,18 +365,18 @@ def plot_adjoint_results(df, label, **plot_args):
     df = compute_adjoint_attributes(df['adjoint'])
 
     # Execution time
-    plot_adjoint_exec_time(df,label, **plot_args)
+    plot_adjoint_exec_time(df,labels, **plot_args)
 
     # Read time
-    plot_read_time(df,label, **plot_args)
+    plot_read_time(df,labels, **plot_args)
 
     # Read troughput
-    plot_read_troughput(df, label, **plot_args)
+    plot_read_troughput(df, labels, **plot_args)
 
     # Read troughput per disk
-    plot_read_troughput_per_disk(df, label, **plot_args)
+    plot_read_troughput_per_disk(df, labels, **plot_args)
 
-def plot_forward_results(df, label, **plot_args):
+def plot_forward_results(df, labels, **plot_args):
 
     plot_args['operator'] = "Forward Propagation"
 
@@ -346,23 +384,34 @@ def plot_forward_results(df, label, **plot_args):
     df = compute_foward_attributes(df['forward'])
 
     # Execution time
-    plot_fwd_exec_time(df, label, **plot_args)
+    plot_fwd_exec_time(df, labels, **plot_args)
 
     # Write time
-    plot_write_time(df, label, **plot_args)
+    plot_write_time(df, labels, **plot_args)
 
     # Write Throughput
-    plot_write_troughput(df, label, **plot_args)
+    plot_write_troughput(df, labels, **plot_args)
 
     # Write Throughput per disk
-    plot_write_troughput_per_disk(df, label, **plot_args)
+    plot_write_troughput_per_disk(df, labels, **plot_args)
 
     #Ratio
-    plot_write_compute_ratio(df, label, **plot_args)
+    plot_write_compute_ratio(df, labels, **plot_args)
 
-def plot_total(df, label, **plot_args):
+def plot_total(df, labels, **plot_args):
 
-    return
+    plot_args['operator'] = "Total"
+
+    # Data Manipulation
+    fwd_df = compute_foward_attributes(df['forward'])
+    adj_df = compute_adjoint_attributes(df['adjoint'])
+    df = compute_total_attributes(fwd_df, adj_df)
+
+    # Execution Time
+    plot_total_exec_time(df, labels, **plot_args)
+
+    # Slowdown
+    plot_total_slowdown(df, labels, **plot_args)
 
 def plot_results(path, output):
 
