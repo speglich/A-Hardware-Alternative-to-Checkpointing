@@ -20,8 +20,7 @@ experiments = {
             'adjoint': {
                 'output' : '1SOCKET/adjoint/{}',
                 'path' : '1SOCKET/adjoint',
-            },
-            },
+            }},
         '2SOCKET': {
             'title' : 'MPI 2 Sockets - 52 Physical Cores',
             'dir': '2SOCKET',
@@ -43,8 +42,7 @@ experiments = {
             'adjoint': {
                 'output' : '1SOCKET/cache/adjoint/{}',
                 'path' : '1SOCKET/cache/adjoint',
-            },
-            },
+            }},
         '2SOCKET-CACHE': {
             'title' : 'Cache - MPI 2 Sockets - 52 Physical Cores',
             'dir': '2SOCKET/cache/',
@@ -55,9 +53,7 @@ experiments = {
             'adjoint': {
                 'output' : '2SOCKET/cache/adjoint/{}',
                 'path' : '2SOCKET/cache/adjoint'
-            }}
-            }
-
+            }}}
 
 # Environment
 def create_dirs(output, experiment, mode):
