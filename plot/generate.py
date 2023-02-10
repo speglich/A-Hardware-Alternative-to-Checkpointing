@@ -7,6 +7,8 @@ import tikzplotlib
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import figure
 
+# Experiments configurations
+
 experiments = {
         '1SOCKET': {
             'title' : '1 Socket - 26 Physical Cores',
@@ -56,6 +58,8 @@ experiments = {
             }}
             }
 
+
+# Environment
 def create_dirs(output, experiment):
 
     png_folder = os.path.join(output, "png")
@@ -99,6 +103,7 @@ def open(path, experiment):
 
     return dfs
 
+# Data Manipulation
 def compute_foward_attributes(df):
 
     fwd = df.sort_values(by=['Disks'])
@@ -116,6 +121,23 @@ def compute_foward_attributes(df):
 
     return fwd
 
+def compute_adjoint_attributes(df):
+
+    rev = df.sort_values(by=['Disks'])
+    rev.set_index('Disks', inplace=True)
+
+    rev["Adjoint Calculation Time"] = rev[' [REV] Section0']  + rev[' [REV] Section1'] + rev[' [REV] Section2']
+    rev["Read Time"] = rev[' [IO] Open'] + rev[' [IO] Read'] + rev[' [IO] Close']
+
+    rev['GB'] = rev[' Bytes'] / 1000000000
+    rev['Read Troughput'] = rev['GB'] / rev [' [IO] Read']
+
+    labels = list(rev.index.values)
+    rev['Read Troughput per disk' ] = rev['Read Troughput'] / labels
+
+    return rev
+
+# Plot
 def plot(df, ram=None, **plot_args):
 
     ax = df.plot.bar(stacked=True, grid=True)
@@ -226,6 +248,70 @@ def plot_write_compute_ratio(df, labels, **plot_args):
 
     plot_ratio(ratio, **plot_args)
 
+def plot_read_troughput_per_disk(df, labels, **plot_args):
+
+    plot_args['experiment'] = "Read Troughput per disk [GB/s]"
+    plot_args['title'] = labels['title']
+    plot_args['output'] =  labels['adjoint']['output'].format("read-troughput-per-disk")
+
+    throughput = df[['Read Troughput per disk']]
+    throughput = throughput.drop(index=(0))
+
+    plot_throughtput(throughput, **plot_args)
+
+def plot_read_troughput(df, labels, **plot_args):
+
+    plot_args['experiment'] = "Read Troughput [GB/s]"
+    plot_args['title'] = labels['title']
+    plot_args['output'] =  labels['adjoint']['output'].format("read-troughput")
+
+    throughput = df[['Read Troughput']]
+    throughput = throughput.drop(index=(0))
+
+    plot_throughtput(throughput, **plot_args)
+
+def plot_read_time(df, labels, **plot_args):
+
+    plot_args['experiment'] = "Read Time [s]"
+    plot_args['title'] = labels['title']
+    plot_args['output'] =  labels['adjoint']['output'].format("read-time")
+
+    read_time = df[['Read Time']]
+    read_time = read_time.drop(index=(0))
+
+    plot_time(read_time, **plot_args)
+
+def plot_adjoint_exec_time(df, labels, **plot_args):
+
+    plot_args['title'] = labels['title']
+    plot_args['experiment'] =  "Execution Time [s]"
+    plot_args['output'] = labels['adjoint']['output'].format('exec-time')
+
+    exec_time = df[["Adjoint Calculation Time", "Read Time"]]
+    ram = exec_time._get_value(0, "Adjoint Calculation Time")
+    exec_time = exec_time.drop(index=(0))
+
+    plot_time(exec_time, ram, **plot_args)
+
+def plot_adjoint_results(df, label, **plot_args):
+
+    plot_args['operator'] = "Adjoint Calculation"
+
+    # Data manipulation
+    df = compute_adjoint_attributes(df)
+
+    # Execution time
+    plot_adjoint_exec_time(df,label, **plot_args)
+
+    # Read time
+    plot_read_time(df,label, **plot_args)
+
+    # Read troughput
+    plot_read_troughput(df, label, **plot_args)
+
+    # Read troughput per disk
+    plot_read_troughput_per_disk(df, label, **plot_args)
+
 def plot_forward_results(df, label, **plot_args):
 
     plot_args['operator'] = "Forward Propagation"
@@ -267,6 +353,11 @@ def plot_results(path, output):
 
             if mode == 'forward':
                 plot_forward_results(dfs[mode], experiments[e], **plot_args)
+            elif mode == 'adjoint':
+                plot_adjoint_results(dfs[mode], experiments[e], **plot_args)
+            else:
+                print('Invalid mode:', mode)
+                continue
 
 if __name__ == '__main__':
 
