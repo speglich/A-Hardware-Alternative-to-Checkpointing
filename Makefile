@@ -3,11 +3,13 @@ $(colon) := :
 
 all: overthrust_3D_initial_model.h5 container disks reverse
 
+# ENVIRONMENT
+
 overthrust_3D_initial_model.h5:
 	wget ftp://slim.gatech.edu/data/SoftwareRelease/WaveformInversion.jl/3DFWI/overthrust_3D_initial_model.h5
 
 container:
-	docker build -t out-of-core -f docker/Dockerfile .
+	sudo docker build -t out-of-core -f docker/Dockerfile .
 
 dummy-disks:
 	mkdir -p data
@@ -21,6 +23,8 @@ disks:
 	$(foreach n,  $(filter-out $(DISK), $(shell seq 0 $(DISK))), mkdir -p data/nvme$(n);)
 	$(foreach n,  $(filter-out $(DISK), $(shell seq 0 $(DISK))), sudo mount -t auto /dev/nvme$(n)n1 data/nvme$(n);)
 	$(foreach n,  $(filter-out $(DISK), $(shell seq 0 $(DISK))), sudo USER=whoami chown -R $(USER) data/nvme$(n);)
+
+# EXPERIMENTS
 
 reverse: overthrust_3D_initial_model.h5 overthrust_experiment.py
 	rm -rf data/nvme*/*
@@ -124,3 +128,14 @@ ram-mpi: overthrust_3D_initial_model.h5 overthrust_experiment.py overthrust_expe
 	-v $(PWD):/app \
 	--network host \
 	-it out-of-core time mpirun --allow-run-as-root --map-by socket -np 2 python3 overthrust_experiment.py --mpi --ram
+
+## PLOT RESULTS ##
+
+plot-container:
+	sudo docker build -t plot-ofc -f docker/Dockerfile.plot .
+
+plot: plot-container
+	sudo docker run -v $(PWD):/app -it plot-ofc python3 plot/generate.py
+
+clean:
+	sudo rm -rf results/figures
