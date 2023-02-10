@@ -138,12 +138,12 @@ def compute_adjoint_attributes(df):
     return rev
 
 # Plot
-def plot(df, ram=None, **plot_args):
+def plot(df, reference=None, **plot_args):
 
     ax = df.plot.bar(stacked=True, grid=True)
 
-    if ram:
-        ax.axhline(y=ram, color='r', linestyle='--', label="RAM Execution Time")
+    if reference:
+        ax.axhline(y=reference, color='r', linestyle='--', label="RAM Execution Time")
 
     ax_label = plot_args['ax_label']
     ay_label = plot_args['ay_label']
@@ -171,12 +171,12 @@ def plot(df, ram=None, **plot_args):
     plt.savefig(png, dpi=350, bbox_inches='tight')
     tikzplotlib.save(tex)
 
-def plot_time(df, ram=None, **plot_args):
+def plot_time(df, reference=None, **plot_args):
 
     plot_args['ax_label'] = "Number of disks"
     plot_args['ay_label'] = "Time [s]"
 
-    plot(df, ram, **plot_args)
+    plot(df, reference, **plot_args)
 
 def plot_throughtput(df, **plot_args):
 
@@ -190,7 +190,7 @@ def plot_ratio(df, **plot_args):
     plot_args['ax_label'] = "Number of disks"
     plot_args['ay_label'] = 'Ratio'
 
-    plot(df, ram=1, **plot_args)
+    plot(df, reference=1, **plot_args)
 
 def plot_fwd_exec_time(df, labels, **plot_args):
 
