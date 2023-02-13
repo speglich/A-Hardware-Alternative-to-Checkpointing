@@ -12,6 +12,7 @@ experiments = {
         '1SOCKET': {
             'title' : '1 Socket - 26 Physical Cores',
             'dir': '1SOCKET',
+            'compare' : False,
             'plots':{
                 'forward': {
                     'output' : '1SOCKET/forward/{}',
@@ -30,6 +31,7 @@ experiments = {
         '2SOCKET': {
             'title' : 'MPI 2 Sockets - 52 Physical Cores',
             'dir' : '2SOCKET',
+            'compare' : False,
             'plots' : {
                 'forward': {
                     'output' : '2SOCKET/forward/{}',
@@ -48,6 +50,7 @@ experiments = {
         '1SOCKET-CACHE': {
             'title' : 'Cache - 1 Socket - 26 Physical Cores',
             'dir' : '1SOCKET/cache/',
+            'compare' : False,
             'plots' : {
                 'forward': {
                     'output' : '1SOCKET/cache/forward/{}',
@@ -66,6 +69,7 @@ experiments = {
         '2SOCKET-CACHE': {
             'title' : 'Cache - MPI 2 Sockets - 52 Physical Cores',
             'dir': '2SOCKET/cache/',
+            'compare': False,
             'plots': {
                 'forward': {
                     'output' : '2SOCKET/cache/forward/{}',
@@ -78,6 +82,28 @@ experiments = {
                 'total': {
                     'output' : '2SOCKET/total/{}',
                     'files' : {'forward' : '2SOCKET/cache/forward', 'adjoint' : '2SOCKET/cache/adjoint'},
+                },
+            },
+        },
+        '1SOCKET-COMPARE' : {
+            'title' : 'Cache x O_DIRECT - 1 Socket - 26 Physical Cores',
+            'dir' : '1SOCKET/compare',
+            'compare': True,
+            'n_compare' : 2,
+            'labels': ['O_DIRECT', 'CACHE'],
+            'plots' : {
+                'forward': {
+                    'output': '1SOCKET/compare/forward/{}',
+                    'files' : {'forward0' : '1SOCKET/forward', 'forward1': '1SOCKET/cache/forward'},
+                },
+                'adjoint': {
+                    'output': '1SOCKET/compare/adjoint/{}',
+                    'files' : {'adjoint0' : '1SOCKET/adjoint', 'adjoint1': '1SOCKET/cache/adjoint'},
+                },
+                'total': {
+                    'output': '1SOCKET/compare/total/{}',
+                    'files' : {'forward0' : '1SOCKET/forward', 'forward1': '1SOCKET/cache/forward',
+                        'adjoint0' : '1SOCKET/adjoint', 'adjoint1': '1SOCKET/cache/adjoint'},
                 },
             },
         },
@@ -133,6 +159,10 @@ def open(root, experiment):
 def compute_foward_attributes(df):
 
     fwd = df.sort_values(by=['Disks'])
+
+    if 'label' not in fwd:
+        fwd['label'] = fwd['Disks']
+
     fwd.set_index('Disks', inplace=True)
 
     fwd["Forward Propagation Time"] = fwd[' [FWD] Section0']  + fwd[' [FWD] Section1'] + fwd[' [FWD] Section2']
@@ -150,6 +180,10 @@ def compute_foward_attributes(df):
 def compute_adjoint_attributes(df):
 
     rev = df.sort_values(by=['Disks'])
+
+    if 'label' not in rev:
+        rev['label'] = rev['Disks']
+
     rev.set_index('Disks', inplace=True)
 
     rev["Adjoint Calculation Time"] = rev[' [REV] Section0']  + rev[' [REV] Section1'] + rev[' [REV] Section2']
@@ -165,12 +199,41 @@ def compute_adjoint_attributes(df):
 
 def compute_total_attributes(fwd_df, adj_df):
 
-    fwd_exec_time = fwd_df[["Forward Propagation Time", "Write Time"]]
+    fwd_exec_time = fwd_df[["Forward Propagation Time", "Write Time", "label"]]
     adj_exec_time = adj_df[["Adjoint Calculation Time", "Read Time"]]
     total = pd.concat([fwd_exec_time, adj_exec_time], axis=1)
-    total = total[["Forward Propagation Time", "Adjoint Calculation Time", "Write Time", "Read Time"]]
+    total = total[["Forward Propagation Time", "Adjoint Calculation Time", "Write Time", "Read Time", "label"]]
 
     return total
+
+def compute_compare_attributes(dfs, labels, mode):
+
+    if labels['compare'] == False:
+        return dfs
+
+    necessary_dfs = {
+        'forward' : ['forward'],
+        'adjoint' : ['adjoint'],
+        'total' : ['forward', 'adjoint'],
+    }
+
+    names = necessary_dfs[mode]
+
+    result = {}
+    for name in names:
+        selected = {}
+        for i in range(labels['n_compare']):
+            df_name = name + str(i)
+            selected[df_name] = dfs[df_name]
+
+        for i, df in enumerate(selected):
+            selected[df]['label'] = selected[df]['Disks'].astype(str) + ' ' + labels['labels'][i]
+
+        df = pd.concat(selected, axis=0)
+
+        result[name] = df.sort_values(by=['Disks', 'label'])
+
+    return result
 
 # Plot
 def plot(df, reference=None, **plot_args):
@@ -190,8 +253,14 @@ def plot(df, reference=None, **plot_args):
     experiment = plot_args['experiment']
     ax.set_title(title + ' - ' + operator + ' - ' + experiment)
 
-    labels = list(df.index.values)
-    ax.set_xticklabels(labels, rotation=0)
+    labels = plot_args.get("label", list(df.index.values))
+
+    if isinstance(labels[0], str):
+        rot = 90
+    else:
+        rot = 0
+
+    ax.set_xticklabels(labels, rotation=rot)
 
     ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
 
@@ -233,9 +302,10 @@ def plot_fwd_exec_time(df, labels, **plot_args):
     plot_args['title'] = labels['title']
     plot_args['experiment'] =  "Execution Time [s]"
     plot_args['output'] = labels['plots']['forward']['output'].format('exec-time')
+    plot_args['label'] = list(df['label'].drop(index=0))
 
     exec_time = df[["Forward Propagation Time", "Write Time"]]
-    ram = exec_time._get_value(0, "Forward Propagation Time")
+    ram = exec_time["Forward Propagation Time"].iloc[0]
     exec_time = exec_time.drop(index=(0))
 
     plot_time(exec_time, ram, **plot_args)
@@ -245,6 +315,7 @@ def plot_write_time(df, labels, **plot_args):
     plot_args['experiment'] = "Write Time [s]"
     plot_args['title'] = labels['title']
     plot_args['output'] =  labels['plots']['forward']['output'].format("write-time")
+    plot_args['label'] = list(df['label'].drop(index=0))
 
     write_time = df[['Write Time']]
     write_time = write_time.drop(index=(0))
@@ -256,6 +327,7 @@ def plot_write_troughput(df, labels, **plot_args):
     plot_args['experiment'] = "Write Troughput [GB/s]"
     plot_args['title'] = labels['title']
     plot_args['output'] =  labels['plots']['forward']['output'].format("write-troughput")
+    plot_args['label'] = list(df['label'].drop(index=0))
 
     throughput = df[['Write Troughput']]
     throughput = throughput.drop(index=(0))
@@ -267,6 +339,7 @@ def plot_write_troughput_per_disk(df, labels, **plot_args):
     plot_args['experiment'] = "Write Troughput per disk [GB/s]"
     plot_args['title'] = labels['title']
     plot_args['output'] =  labels['plots']['forward']['output'].format("write-troughput-per-disk")
+    plot_args['label'] = list(df['label'].drop(index=0))
 
     throughput = df[['Write Troughput per disk']]
     throughput = throughput.drop(index=(0))
@@ -278,6 +351,7 @@ def plot_write_compute_ratio(df, labels, **plot_args):
     plot_args['experiment'] = "Write Time / Compute Time Ratio"
     plot_args['title'] = labels['title']
     plot_args['output'] =  labels['plots']['forward']['output'].format("write-ratio")
+    plot_args['label'] = list(df['label'].drop(index=0))
 
     ratio = df[['Ratio']]
     ratio = ratio.drop(index=(0))
@@ -289,6 +363,7 @@ def plot_read_troughput_per_disk(df, labels, **plot_args):
     plot_args['experiment'] = "Read Troughput per disk [GB/s]"
     plot_args['title'] = labels['title']
     plot_args['output'] =  labels['plots']['adjoint']['output'].format("read-troughput-per-disk")
+    plot_args['label'] = list(df['label'].drop(index=0))
 
     throughput = df[['Read Troughput per disk']]
     throughput = throughput.drop(index=(0))
@@ -300,6 +375,7 @@ def plot_read_troughput(df, labels, **plot_args):
     plot_args['experiment'] = "Read Troughput [GB/s]"
     plot_args['title'] = labels['title']
     plot_args['output'] =  labels['plots']['adjoint']['output'].format("read-troughput")
+    plot_args['label'] = list(df['label'].drop(index=0))
 
     throughput = df[['Read Troughput']]
     throughput = throughput.drop(index=(0))
@@ -311,6 +387,7 @@ def plot_read_time(df, labels, **plot_args):
     plot_args['experiment'] = "Read Time [s]"
     plot_args['title'] = labels['title']
     plot_args['output'] =  labels['plots']['adjoint']['output'].format("read-time")
+    plot_args['label'] = list(df['label'].drop(index=0))
 
     read_time = df[['Read Time']]
     read_time = read_time.drop(index=(0))
@@ -322,9 +399,10 @@ def plot_adjoint_exec_time(df, labels, **plot_args):
     plot_args['title'] = labels['title']
     plot_args['experiment'] =  "Execution Time [s]"
     plot_args['output'] = labels['plots']['adjoint']['output'].format('exec-time')
+    plot_args['label'] = list(df['label'].drop(index=0))
 
     exec_time = df[["Adjoint Calculation Time", "Read Time"]]
-    ram = exec_time._get_value(0, "Adjoint Calculation Time")
+    ram = exec_time["Adjoint Calculation Time"].iloc[0]
     exec_time = exec_time.drop(index=(0))
 
     plot_time(exec_time, ram, **plot_args)
@@ -334,8 +412,9 @@ def plot_total_exec_time(df, labels, **plot_args):
     plot_args['title'] = labels['title']
     plot_args['experiment'] =  "Execution Time [s]"
     plot_args['output'] = labels['plots']['total']['output'].format('exec-time')
+    plot_args['label'] = list(df['label'].drop(index=0))
 
-    ram = df._get_value(0, "Adjoint Calculation Time") + df._get_value(0, "Forward Propagation Time")
+    ram = df["Adjoint Calculation Time"].iloc[0] + df["Forward Propagation Time"].iloc[0]
     df = df.drop(index=(0))
 
     plot_time(df, ram, **plot_args)
@@ -345,11 +424,12 @@ def plot_total_slowdown(df, labels, **plot_args):
     plot_args['title'] = labels['title']
     plot_args['experiment'] =  "Performance Impact"
     plot_args['output'] = labels['plots']['total']['output'].format('slowdown')
+    plot_args['label'] = list(df['label'].drop(index=0))
 
     df["Total"] = df["Forward Propagation Time"] + df["Adjoint Calculation Time"] \
                 + df["Write Time"] + df["Read Time"]
 
-    ram_time = df._get_value(0, "Total")
+    ram_time = df["Total"].iloc[0]
 
     df = df.drop(index=(0))
 
@@ -362,6 +442,7 @@ def plot_adjoint_results(df, labels, **plot_args):
     plot_args['operator'] = "Adjoint Calculation"
 
     # Data manipulation
+    df = compute_compare_attributes(df, labels, 'adjoint')
     df = compute_adjoint_attributes(df['adjoint'])
 
     # Execution time
@@ -381,6 +462,7 @@ def plot_forward_results(df, labels, **plot_args):
     plot_args['operator'] = "Forward Propagation"
 
     # Data Manipulation
+    df = compute_compare_attributes(df, labels, 'forward')
     df = compute_foward_attributes(df['forward'])
 
     # Execution time
@@ -398,11 +480,12 @@ def plot_forward_results(df, labels, **plot_args):
     #Ratio
     plot_write_compute_ratio(df, labels, **plot_args)
 
-def plot_total(df, labels, **plot_args):
+def plot_total_results(df, labels, **plot_args):
 
     plot_args['operator'] = "Total"
 
     # Data Manipulation
+    df = compute_compare_attributes(df, labels, 'total')
     fwd_df = compute_foward_attributes(df['forward'])
     adj_df = compute_adjoint_attributes(df['adjoint'])
     df = compute_total_attributes(fwd_df, adj_df)
@@ -418,7 +501,7 @@ def plot_results(path, output):
     plot_functions = {
                     'forward' : plot_forward_results,
                     'adjoint' : plot_adjoint_results,
-                    'total' : plot_total,
+                    'total' : plot_total_results,
                     }
 
     for e in experiments:
