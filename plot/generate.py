@@ -245,8 +245,8 @@ def plot(df, reference=None, **plot_args):
 
     ax_label = plot_args['ax_label']
     ay_label = plot_args['ay_label']
-    ax.set_ylabel(ax_label)
-    ax.set_xlabel(ay_label)
+    ax.set_xlabel(ax_label)
+    ax.set_ylabel(ay_label)
 
     title = plot_args ['title']
     operator = plot_args['operator']
