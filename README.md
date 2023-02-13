@@ -1,4 +1,4 @@
-# Offloading to Nvme: A Hardware Alternative to Checkpointing - Overthrust Experiments - SIAM 23 / Computers & Geosciences
+# Offloading to NVMe: A Hardware Alternative to Checkpointing - Overthrust Experiments - SIAM 23 / Computers & Geosciences
 
 # About
 
@@ -35,22 +35,44 @@ The following results was obtained using DenseIO.52 Oracle Cloud Bare Metal Mach
 
 ## 1 Socket - O_DIRECT
 
+### Total Execution Time
+
+#### Total Execution Time 
+![Execution Time](docs/figures/1SOCKET/total/exec-time.png)
+
+#### Total Slowdown 
+
+Ratio equals to 1 means the execution is the same speed of using only RAM. 
+
+![Slowdown](docs/figures/1SOCKET/total/slowdown.png)
+
 ### Write Experiments
 
+#### Execution Time
 ![Execution Time](docs/figures/1SOCKET/forward/exec-time.png)
+
+#### Write Time
 ![Write Time](docs/figures/1SOCKET/forward/write-time.png)
+
+#### Write Ratio
 ![Write Ratio](docs/figures/1SOCKET/forward/write-ratio.png)
-![Write Throughtput](docs/figures/1SOCKET/forward/write-throughtput.png)
-![Write Throughtput Per Disk](docs/figures/1SOCKET/forward/write-throughtput-per-disk.png)
+
+#### Write Troughput
+![Write Throughtput](docs/figures/1SOCKET/forward/write-troughput.png)
+
+#### Write Troughput per disk
+![Write Throughput Per Disk](docs/figures/1SOCKET/forward/write-troughput-per-disk.png)
 
 ### Read Experiments
 
-![Execution Time](docs/figures/2SOCKET/adjoint/exec-time.png)
-![Read Time](docs/figures/2SOCKET/adjoint/write-time.png)
-![Read Throughtput](docs/figures/2SOCKET/adjoint/read-throughtput.png)
-![Write Throughtput Per Disk](docs/figures/1SOCKET/adjoint/read-throughtput-per-disk.png)
+#### Execution Time
+![Execution Time](docs/figures/1SOCKET/adjoint/exec-time.png)
 
-### Total Execution Time
+#### Read Time
+![Read Time](docs/figures/1SOCKET/adjoint/read-time.png)
 
-![Execution Time](docs/figures/2SOCKET/total/exec-time.png)
-![Slowdown](docs/figures/2SOCKET/total/slowdown.png)
+#### Read Troughput
+![Read Throughtput](docs/figures/1SOCKET/adjoint/read-troughput.png)
+
+#### Read Troughput per disk
+![Read Throughtput Per Disk](docs/figures/1SOCKET/adjoint/read-troughput-per-disk.png)
