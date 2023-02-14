@@ -233,6 +233,8 @@ def compute_compare_attributes(dfs, labels, mode):
 
         result[name] = df.sort_values(by=['Disks', 'label'])
 
+    print(result)
+
     return result
 
 # Plot
@@ -413,6 +415,8 @@ def plot_total_exec_time(df, labels, **plot_args):
     plot_args['experiment'] =  "Execution Time [s]"
     plot_args['output'] = labels['plots']['total']['output'].format('exec-time')
     plot_args['label'] = list(df['label'].drop(index=0))
+
+    df = df[["Forward Propagation Time", "Adjoint Calculation Time", "Write Time", "Read Time"]]
 
     ram = df["Adjoint Calculation Time"].iloc[0] + df["Forward Propagation Time"].iloc[0]
     df = df.drop(index=(0))
