@@ -76,3 +76,61 @@ Ratio equals to 1 means the execution is the same speed of using only RAM.
 
 #### Read Troughput per disk
 ![Read Throughtput Per Disk](docs/figures/1SOCKET/adjoint/read-troughput-per-disk.png)
+
+## Cache Comparasion - 1 Socket
+
+### Total Execution Time
+
+#### Total Execution Time 
+![Execution Time](docs/figures/1SOCKET/compare/total/exec-time.png)
+
+#### Total Slowdown 
+
+Ratio equals to 1 means the execution is the same speed of using only RAM. 
+
+![Slowdown](docs/figures/1SOCKET/compare/total/slowdown.png)
+
+## 2 Sockets - O_DIRECT
+
+### Total Execution Time
+
+#### Total Execution Time 
+![Execution Time](docs/figures/2SOCKET/total/exec-time.png)
+
+#### Total Slowdown 
+
+Ratio equals to 1 means the execution is the same speed of using only RAM. 
+
+![Slowdown](docs/figures/2SOCKET/total/slowdown.png)
+
+### Write Experiments
+
+#### Execution Time
+![Execution Time](docs/figures/2SOCKET/forward/exec-time.png)
+
+#### Write Time
+![Write Time](docs/figures/2SOCKET/forward/write-time.png)
+
+#### Write Ratio
+![Write Ratio](docs/figures/2SOCKET/forward/write-ratio.png)
+
+#### Write Troughput
+![Write Throughtput](docs/figures/2SOCKET/forward/write-troughput.png)
+
+#### Write Troughput per disk
+![Write Throughput Per Disk](docs/figures/2SOCKET/forward/write-troughput-per-disk.png)
+
+### Read Experiments
+
+#### Execution Time
+![Execution Time](docs/figures/2SOCKET/adjoint/exec-time.png)
+
+#### Read Time
+![Read Time](docs/figures/2SOCKET/adjoint/read-time.png)
+
+#### Read Troughput
+![Read Throughtput](docs/figures/2SOCKET/adjoint/read-troughput.png)
+
+#### Read Troughput per disk
+![Read Throughtput Per Disk](docs/figures/2SOCKET/adjoint/read-troughput-per-disk.png)
+
