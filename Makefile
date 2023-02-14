@@ -1,11 +1,12 @@
 colon := :
 $(colon) := :
 
-DISKS :=8
+DISKS := 8
+MPIDISKS := 4
 OUTPUT_DIR := results/$(shell /bin/date "+%Y-%m-%d--%H-%M-%S")
 
-all: clean model container disks output-dir 1SOCKET 1SOCKET-CACHE 2SOCKET 2SOCKET-CACHE plot
-nfs: clean model container nfs-disks output-dir 1SOCKET 1SOCKET-CACHE 2SOCKET 2SOCKET-CACHE plot
+oracle: model container disks output-dir 1SOCKET 1SOCKET-CACHE 2SOCKET 2SOCKET-CACHE plot
+nfs: model container nfs-disks output-dir 1SOCKET 1SOCKET-CACHE 2SOCKET 2SOCKET-CACHE plot
 
 # ENVIRONMENT
 
@@ -33,10 +34,12 @@ disks:
 
 # EXPERIMENTS
 
-1SOCKET: model container output-dir ram
+1SOCKET: model container output-dir
 
 	mkdir -p $(OUTPUT_DIR)/1SOCKET/forward
 	mkdir -p $(OUTPUT_DIR)/1SOCKET/adjoint
+
+	$(MAKE) ram
 
 	@for DISK in $$(seq 1 $(DISKS)); do \
 		echo "Running Adjoint to $$DISK disk (s)!"; \
@@ -59,6 +62,8 @@ disks:
 
 	mkdir -p $(OUTPUT_DIR)/1SOCKET/cache/forward
 	mkdir -p $(OUTPUT_DIR)/1SOCKET/cache/adjoint
+
+	$(MAKE) ram
 
 	@for DISK in $$(seq 1 $(DISKS)); do \
 		echo "Running Adjoint CACHED to $$DISK disk (s)!"; \
@@ -83,7 +88,9 @@ disks:
 	mkdir -p $(OUTPUT_DIR)/2SOCKET/forward
 	mkdir -p $(OUTPUT_DIR)/2SOCKET/adjoint
 
-	@for DISK in $$(seq 1 $(DISKS)); do \
+	$(MAKE) ram-mpi
+
+	@for DISK in $$(seq 1 $(MPIDISKS)); do \
 		echo "Running Adjoint CACHED to $$DISK disk (s)!"; \
 		rm -rf data/nvme*/*; \
 		sudo docker run \
@@ -107,7 +114,9 @@ disks:
 	mkdir -p $(OUTPUT_DIR)/2SOCKET/cache/forward
 	mkdir -p $(OUTPUT_DIR)/2SOCKET/cache/adjoint
 
-	@for DISK in $$(seq 1 $(DISKS)); do \
+	$(MAKE) ram-mpi
+
+	@for DISK in $$(seq 1 $(MPIDISKS)); do \
 		echo "Running Adjoint CACHED to $$DISK disk (s)!"; \
 		rm -rf data/nvme*/*; \
 		sudo docker run \
@@ -150,7 +159,7 @@ ram: model container
 	-it out-of-core time numactl --cpubind=0  python3 overthrust_experiment.py --ram
 
 # Missing --bind-to socket
-ram-mpi: overthrust_3D_initial_model.h5 overthrust_experiment.py overthrust_experiment.py
+ram-mpi: model container
 	rm -rf data/nvme*/*
 	sudo docker run \
 	-e DEVITO_OPT=advanced \
