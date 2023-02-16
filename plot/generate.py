@@ -170,10 +170,10 @@ def compute_foward_attributes(df):
     fwd['Ratio'] = fwd["Write Time"] / fwd["Forward Propagation Time"]
 
     fwd['GB'] = fwd[' Bytes'] / 1000000000
-    fwd['Write Troughput'] = fwd['GB'] / fwd [' [IO] Write']
+    fwd['Write Throughput'] = fwd['GB'] / fwd [' [IO] Write']
 
     labels = list(fwd.index.values)
-    fwd['Write Troughput per disk' ] = fwd['Write Troughput'] / labels
+    fwd['Write Throughput per disk' ] = fwd['Write Throughput'] / labels
 
     return fwd
 
@@ -190,10 +190,10 @@ def compute_adjoint_attributes(df):
     rev["Read Time"] = rev[' [IO] Open'] + rev[' [IO] Read'] + rev[' [IO] Close']
 
     rev['GB'] = rev[' Bytes'] / 1000000000
-    rev['Read Troughput'] = rev['GB'] / rev [' [IO] Read']
+    rev['Read Throughput'] = rev['GB'] / rev [' [IO] Read']
 
     labels = list(rev.index.values)
-    rev['Read Troughput per disk' ] = rev['Read Troughput'] / labels
+    rev['Read Throughput per disk' ] = rev['Read Throughput'] / labels
 
     return rev
 
@@ -232,8 +232,6 @@ def compute_compare_attributes(dfs, labels, mode):
         df = pd.concat(selected, axis=0)
 
         result[name] = df.sort_values(by=['Disks', 'label'])
-
-    print(result)
 
     return result
 
@@ -324,26 +322,26 @@ def plot_write_time(df, labels, **plot_args):
 
     plot_time(write_time, **plot_args)
 
-def plot_write_troughput(df, labels, **plot_args):
+def plot_write_throughput(df, labels, **plot_args):
 
-    plot_args['experiment'] = "Write Troughput [GB/s]"
+    plot_args['experiment'] = "Write Throughput [GB/s]"
     plot_args['title'] = labels['title']
-    plot_args['output'] =  labels['plots']['forward']['output'].format("write-troughput")
+    plot_args['output'] =  labels['plots']['forward']['output'].format("write-throughput")
     plot_args['label'] = list(df['label'].drop(index=0))
 
-    throughput = df[['Write Troughput']]
+    throughput = df[['Write Throughput']]
     throughput = throughput.drop(index=(0))
 
     plot_throughtput(throughput, **plot_args)
 
-def plot_write_troughput_per_disk(df, labels, **plot_args):
+def plot_write_throughput_per_disk(df, labels, **plot_args):
 
-    plot_args['experiment'] = "Write Troughput per disk [GB/s]"
+    plot_args['experiment'] = "Write Throughput per disk [GB/s]"
     plot_args['title'] = labels['title']
-    plot_args['output'] =  labels['plots']['forward']['output'].format("write-troughput-per-disk")
+    plot_args['output'] =  labels['plots']['forward']['output'].format("write-throughput-per-disk")
     plot_args['label'] = list(df['label'].drop(index=0))
 
-    throughput = df[['Write Troughput per disk']]
+    throughput = df[['Write Throughput per disk']]
     throughput = throughput.drop(index=(0))
 
     plot_throughtput(throughput, **plot_args)
@@ -360,26 +358,26 @@ def plot_write_compute_ratio(df, labels, **plot_args):
 
     plot_ratio(ratio, **plot_args)
 
-def plot_read_troughput_per_disk(df, labels, **plot_args):
+def plot_read_throughput_per_disk(df, labels, **plot_args):
 
-    plot_args['experiment'] = "Read Troughput per disk [GB/s]"
+    plot_args['experiment'] = "Read Throughput per disk [GB/s]"
     plot_args['title'] = labels['title']
-    plot_args['output'] =  labels['plots']['adjoint']['output'].format("read-troughput-per-disk")
+    plot_args['output'] =  labels['plots']['adjoint']['output'].format("read-throughput-per-disk")
     plot_args['label'] = list(df['label'].drop(index=0))
 
-    throughput = df[['Read Troughput per disk']]
+    throughput = df[['Read Throughput per disk']]
     throughput = throughput.drop(index=(0))
 
     plot_throughtput(throughput, **plot_args)
 
-def plot_read_troughput(df, labels, **plot_args):
+def plot_read_throughput(df, labels, **plot_args):
 
-    plot_args['experiment'] = "Read Troughput [GB/s]"
+    plot_args['experiment'] = "Read Throughput [GB/s]"
     plot_args['title'] = labels['title']
-    plot_args['output'] =  labels['plots']['adjoint']['output'].format("read-troughput")
+    plot_args['output'] =  labels['plots']['adjoint']['output'].format("read-throughput")
     plot_args['label'] = list(df['label'].drop(index=0))
 
-    throughput = df[['Read Troughput']]
+    throughput = df[['Read Throughput']]
     throughput = throughput.drop(index=(0))
 
     plot_throughtput(throughput, **plot_args)
@@ -455,11 +453,11 @@ def plot_adjoint_results(df, labels, **plot_args):
     # Read time
     plot_read_time(df,labels, **plot_args)
 
-    # Read troughput
-    plot_read_troughput(df, labels, **plot_args)
+    # Read Throughput
+    plot_read_throughput(df, labels, **plot_args)
 
-    # Read troughput per disk
-    plot_read_troughput_per_disk(df, labels, **plot_args)
+    # Read Throughput per disk
+    plot_read_throughput_per_disk(df, labels, **plot_args)
 
 def plot_forward_results(df, labels, **plot_args):
 
@@ -476,10 +474,10 @@ def plot_forward_results(df, labels, **plot_args):
     plot_write_time(df, labels, **plot_args)
 
     # Write Throughput
-    plot_write_troughput(df, labels, **plot_args)
+    plot_write_throughput(df, labels, **plot_args)
 
     # Write Throughput per disk
-    plot_write_troughput_per_disk(df, labels, **plot_args)
+    plot_write_throughput_per_disk(df, labels, **plot_args)
 
     #Ratio
     plot_write_compute_ratio(df, labels, **plot_args)
