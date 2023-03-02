@@ -61,7 +61,7 @@ experiments = {
                     'files' : {'adjoint' : '1SOCKET/cache/adjoint'},
                 },
                 'total': {
-                    'output' : '1SOCKET/total/{}',
+                    'output' : '1SOCKET/cache/total/{}',
                     'files' : {'forward' : '1SOCKET/cache/forward', 'adjoint' : '1SOCKET/cache/adjoint'},
                 },
             },

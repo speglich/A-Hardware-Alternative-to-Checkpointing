@@ -7,6 +7,7 @@ OUTPUT_DIR := results/$(shell /bin/date "+%Y-%m-%d--%H-%M-%S")
 
 oracle: model container disks output-dir 1SOCKET 1SOCKET-CACHE 2SOCKET 2SOCKET-CACHE plot
 nfs: model container nfs-disks output-dir 1SOCKET 1SOCKET-CACHE 2SOCKET 2SOCKET-CACHE plot
+test:  model container disks output-dir 1SOCKET plot
 
 # ENVIRONMENT
 
@@ -21,16 +22,16 @@ container:
 
 nfs-disks:
 	mkdir -p data
-	$(foreach n,  $(filter-out $(DISK), $(shell seq 0 $(DISK))), sudo umount /dev/nvme$(n)n1 || /bin/true;)
-	$(foreach n,  $(filter-out $(DISK), $(shell seq 0 $(DISK))), mkdir -p data/nvme$(n);)
+	$(foreach n,  $(filter-out $(DISKS), $(shell seq 0 $(DISKS))), sudo umount /dev/nvme$(n)n1 || /bin/true;)
+	$(foreach n,  $(filter-out $(DISKS), $(shell seq 0 $(DISKS))), mkdir -p data/nvme$(n);)
 
 disks:
 	mkdir -p data
-	$(foreach n,  $(filter-out $(DISK), $(shell seq 0 $(DISK))), sudo umount /dev/nvme$(n)n1 || /bin/true;)
-	$(foreach n,  $(filter-out $(DISK), $(shell seq 0 $(DISK))), sudo mkfs -F -t ext4 /dev/nvme$(n)n1;)
-	$(foreach n,  $(filter-out $(DISK), $(shell seq 0 $(DISK))), mkdir -p data/nvme$(n);)
-	$(foreach n,  $(filter-out $(DISK), $(shell seq 0 $(DISK))), sudo mount -t auto /dev/nvme$(n)n1 data/nvme$(n);)
-	$(foreach n,  $(filter-out $(DISK), $(shell seq 0 $(DISK))), sudo USER=whoami chown -R $(USER) data/nvme$(n);)
+	$(foreach n,  $(filter-out $(DISKS), $(shell seq 0 $(DISKS))), sudo umount /dev/nvme$(n)n1 || /bin/true;)
+	$(foreach n,  $(filter-out $(DISKS), $(shell seq 0 $(DISKS))), sudo mkfs -F -t ext4 /dev/nvme$(n)n1;)
+	$(foreach n,  $(filter-out $(DISKS), $(shell seq 0 $(DISKS))), mkdir -p data/nvme$(n);)
+	$(foreach n,  $(filter-out $(DISKS), $(shell seq 0 $(DISKS))), sudo mount -t auto /dev/nvme$(n)n1 data/nvme$(n);)
+	$(foreach n,  $(filter-out $(DISKS), $(shell seq 0 $(DISKS))), sudo USER=whoami chown -R $(USER) data/nvme$(n);)
 
 # EXPERIMENTS
 
