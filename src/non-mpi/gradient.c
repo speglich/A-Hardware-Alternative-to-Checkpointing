@@ -11,11 +11,7 @@
 #define NDISKS 8
 #endif
 
-#ifdef CACHE
 #define OPEN_FLAGS O_RDONLY
-#else
-#define OPEN_FLAGS O_DIRECT | O_RDONLY
-#endif
 
 #include "stdlib.h"
 #include "math.h"
