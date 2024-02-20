@@ -1,7 +1,7 @@
 colon := :
 $(colon) := :
 
-DISKS := 8
+DISKS := 1
 MPIDISKS := 4
 OUTPUT_DIR := results/$(shell /bin/date "+%Y-%m-%d--%H-%M-%S")
 
@@ -54,6 +54,30 @@ disks:
 		-e DEVITO_LOGGING=DEBUG \
 		-v $(PWD):/app \
 		-it out-of-core time numactl --cpubind=0  python3 overthrust_experiment.py --disks=$$DISK; \
+	done
+
+	mv fwd*.csv $(OUTPUT_DIR)/1SOCKET/forward
+	mv rev*.csv $(OUTPUT_DIR)/1SOCKET/adjoint
+
+1SOCKET-TTI: model container output-dir
+
+	mkdir -p $(OUTPUT_DIR)/1SOCKET/tti/forward
+	mkdir -p $(OUTPUT_DIR)/1SOCKET/tti/adjoint
+
+	$(MAKE) ram-tti
+
+	@for DISK in $$(seq 1 $(DISKS)); do \
+		echo "Running Adjoint to $$DISK disk (s)!"; \
+		rm -rf data/nvme*/*; \
+		sudo docker run \
+		-e DEVITO_OPT=advanced \
+		-e DEVITO_LANGUAGE=openmp \
+		-e DEVITO_PLATFORM=skx \
+		-e OMP_NUM_THREADS=26 \
+		-e OMP_PLACES="{0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25}" \
+		-e DEVITO_LOGGING=DEBUG \
+		-v $(PWD):/app \
+		-it out-of-core time numactl --cpubind=0  python3 overthrust_experiment.py --disks=$$DISK -k TTI; \
 	done
 
 	mv fwd*.csv $(OUTPUT_DIR)/1SOCKET/forward
@@ -158,6 +182,18 @@ ram: model container
 	-e DEVITO_LOGGING=DEBUG \
 	-v $(PWD):/app \
 	-it out-of-core time numactl --cpubind=0  python3 overthrust_experiment.py --ram
+
+ram-tti: model container
+	rm -rf data/nvme*/*
+	sudo docker run \
+	-e DEVITO_OPT=advanced \
+	-e DEVITO_LANGUAGE=openmp \
+	-e DEVITO_PLATFORM=skx \
+	-e OMP_NUM_THREADS=26 \
+	-e OMP_PLACES="{0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25}" \
+	-e DEVITO_LOGGING=DEBUG \
+	-v $(PWD):/app \
+	-it out-of-core time numactl --cpubind=0  python3 overthrust_experiment.py --ram -k TTI
 
 # Missing --bind-to socket
 ram-mpi: model container

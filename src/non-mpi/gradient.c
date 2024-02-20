@@ -51,7 +51,8 @@ struct io_profiler
   double close;
 } ;
 
-void open_thread_files(int *files, int nthreads)
+// Add variable to describe from which vector the data is coming from
+void open_thread_files(int *files, int nthreads, char *vector)
 {
 
   for(int i=0; i < nthreads; i++)
@@ -59,7 +60,7 @@ void open_thread_files(int *files, int nthreads)
     int nvme_id = i % NDISKS;
     char name[100];
 
-    sprintf(name, "data/nvme%d/thread_%d.data", nvme_id, i);
+    sprintf(name, "data/nvme%d/%s_vec_%d.bin", nvme_id, vector, i);
     printf("Reading file %s\n", name);
 
     if ((files[i] = open(name, OPEN_FLAGS,
@@ -127,14 +128,14 @@ int Gradient(struct dataobj *restrict damp_vec, const float dt, struct dataobj *
   /* Begin open files Section */
   START_TIMER(open)
 
-  int *files = malloc(nthreads * sizeof(int));
-  if (files == NULL)
+  int *u_files = malloc(nthreads * sizeof(int));
+  if (u_files == NULL)
   {
     printf("Error to alloc\n");
     exit(1);
   }
 
-  open_thread_files(files, nthreads);
+  open_thread_files(u_files, nthreads, "u");
 
   int *counters = malloc(nthreads * sizeof(int));
 
@@ -263,9 +264,9 @@ int Gradient(struct dataobj *restrict damp_vec, const float dt, struct dataobj *
       int tid = i%nthreads;
 
       off_t offset = counters[tid] * u_size;
-      lseek(files[tid], -1 * offset, SEEK_END);
+      lseek(u_files[tid], -1 * offset, SEEK_END);
 
-      int ret = read(files[tid], u[t0][i], u_size);
+      int ret = read(u_files[tid], u[t0][i], u_size);
 
       if (ret != u_size) {
           printf("%d", ret);
@@ -308,7 +309,7 @@ int Gradient(struct dataobj *restrict damp_vec, const float dt, struct dataobj *
   /* Begin close section */
   START_TIMER(close)
   for(int i=0; i < nthreads; i++){
-    close(files[i]);
+    close(u_files[i]);
   }
   STOP_TIMER(close, iop)
   /* End close section */
@@ -318,7 +319,7 @@ int Gradient(struct dataobj *restrict damp_vec, const float dt, struct dataobj *
   save(nthreads, timers, iop, read_size);
 
   free(iop);
-  free(files);
+  free(u_files);
   free(counters);
 
   return 0;

@@ -1,4 +1,5 @@
 data
 *.so
 GRADIENT_C_DEVITO/devito-codepy-*
+__pycache__/
 overthrust_3D_initial_model.h5

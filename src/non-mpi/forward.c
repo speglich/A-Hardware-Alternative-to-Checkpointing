@@ -51,7 +51,9 @@ struct io_profiler
   double close;
 } ;
 
-void open_thread_files(int *files, int nthreads)
+
+// Add variable to describe from which vector the data is coming from
+void open_thread_files(int *files, int nthreads, char *vector)
 {
 
   for(int i=0; i < nthreads; i++)
@@ -59,7 +61,7 @@ void open_thread_files(int *files, int nthreads)
     int nvme_id = i % NDISKS;
     char name[100];
 
-    sprintf(name, "data/nvme%d/thread_%d.data", nvme_id, i);
+    sprintf(name, "data/nvme%d/%s_vec_%d.bin", nvme_id, vector, i);
     printf("Creating file %s\n", name);
 
     if ((files[i] = open(name, OPEN_FLAGS ,
@@ -126,13 +128,13 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
   /* Begin Open Files Section */
   START_TIMER(open)
 
-  int *files = malloc(nthreads * sizeof(int));
-  if (files == NULL)
+  int *u_files = malloc(nthreads * sizeof(int));
+  if (u_files == NULL)
   {
       printf("Error to alloc\n");
       exit(1);
   }
-  open_thread_files(files, nthreads);
+  open_thread_files(u_files, nthreads, "u");
 
   STOP_TIMER(open, iop)
   /* End Open Files Section */
@@ -306,7 +308,7 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
     for(int i=0; i < u_vec->size[1];i++)
     {
       int tid = i%nthreads;
-      int ret = write(files[tid], u[t0][i], u_size);
+      int ret = write(u_files[tid], u[t0][i], u_size);
       if (ret != u_size) {
           perror("Cannot open output file");
           exit(1);
@@ -319,7 +321,7 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
   /* Begin close section */
   START_TIMER(close)
   for(int i=0; i < nthreads; i++){
-    close(files[i]);
+    close(u_files[i]);
   }
   STOP_TIMER(close, iop)
   /* End close section */
@@ -328,7 +330,7 @@ int Forward(struct dataobj *restrict damp_vec, const float dt, const float o_x, 
   save(nthreads, timers, iop, write_size);
 
   free(iop);
-  free(files);
+  free(u_files);
 
   return 0;
 }
