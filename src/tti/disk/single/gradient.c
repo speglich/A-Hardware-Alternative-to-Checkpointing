@@ -11,11 +11,8 @@
 #define NDISKS 8
 #endif
 
-#ifdef CACHE
 #define OPEN_FLAGS O_RDONLY
-#else
-#define OPEN_FLAGS O_DIRECT | O_RDONLY
-#endif
+
 
 #include "stdlib.h"
 #include "math.h"
@@ -204,8 +201,11 @@ int GradientTTI(struct dataobj *restrict damp_vec, struct dataobj *restrict delt
   STOP_TIMER(open, iop)
   /* End open files section */
 
-  size_t u_size = u0_vec->size[2]*u0_vec->size[3]*sizeof(float);
-  size_t v_size = v0_vec->size[2]*v0_vec->size[3]*sizeof(float);
+  int border_x = 10;
+  int border_y = 10;
+  int border_z = 10;
+  size_t u_size = (u0_vec->size[2] - 2 * border_y) * (u0_vec->size[3] - 2 * border_z)*sizeof(float);
+  size_t v_size = (v0_vec->size[2] - 2 * border_y) * (v0_vec->size[3] - 2 * border_z)*sizeof(float);
 
   /* Begin section0 */
   START_TIMER(section0)
@@ -427,42 +427,47 @@ int GradientTTI(struct dataobj *restrict damp_vec, struct dataobj *restrict delt
     /* Begin read section */
     START_TIMER(read)
     #pragma omp parallel for schedule(static,1) num_threads(nthreads)
-    for(int i= u0_vec->size[1]-1;i>=0;i--)
+    for(int i= u0_vec->size[1]-1-border_x;i>=border_x;i--)
     {
       int tid = i%nthreads;
 
       off_t offset = u_counters[tid] * u_size;
       lseek(u_files[tid], -1 * offset, SEEK_END);
 
-      int ret = read(u_files[tid], u0[t0][i], u_size);
-
-      if (ret != u_size) {
-          printf("%d", ret);
-          perror("Cannot open output file");
-          exit(1);
+      int u0z_size = (u0_vec->size[3]-2*border_z)*sizeof(float);
+      //for(int j=u0_vec->size[2]-1-border_y;j>=border_y;j--)
+      for(int j=border_y;j<u0_vec->size[2]-border_y;j++)
+      {
+        int ret = read(u_files[tid], &u0[t0][i][j][border_z], u0z_size);
+        if (ret != u0z_size) {
+            printf("%d", ret);
+            perror("Error reading from output file");
+            exit(1);
+        }
       }
-
       u_counters[tid]++;
     }
 
     #pragma omp parallel for schedule(static,1) num_threads(nthreads)
-    for(int i= v0_vec->size[1]-1;i>=0;i--)
+    for(int i= v0_vec->size[1]-1-border_x;i>=border_x;i--)
     {
       int tid = i%nthreads;
-
       off_t offset = v_counters[tid] * v_size;
       lseek(v_files[tid], -1 * offset, SEEK_END);
 
-      int ret = read(v_files[tid], v0[t0][i], v_size);
-
-      if (ret != v_size) {
-          printf("%d", ret);
-          perror("Cannot open output file");
-          exit(1);
+      int v0z_size = (v0_vec->size[3]-2*border_z)*sizeof(float);
+      //for(int j=v0_vec->size[2]-1-border_y;j>=border_y;j--)
+      for(int j=border_y;j<v0_vec->size[2]-border_y;j++)
+      {
+        int ret = read(v_files[tid], &v0[t0][i][j][border_z], v0z_size);
+        if (ret != v0z_size) {
+            perror("Error reading from output file");
+            exit(1);
+        }
       }
-
       v_counters[tid]++;
     }
+
     STOP_TIMER(read, iop);
     /* End read section */
 

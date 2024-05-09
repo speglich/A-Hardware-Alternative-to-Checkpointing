@@ -11,11 +11,7 @@
 #define NDISKS 8
 #endif
 
-#ifdef CACHE
 #define OPEN_FLAGS O_WRONLY | O_CREAT
-#else
-#define OPEN_FLAGS O_DIRECT | O_WRONLY | O_CREAT
-#endif
 
 #include "stdlib.h"
 #include "math.h"
@@ -451,26 +447,38 @@ int ForwardTTI(struct dataobj *restrict damp_vec, struct dataobj *restrict delta
     /* Begin write section */
     START_TIMER(write)
 
+    int border_x = 10;
+    int border_y = 10;
+    int border_z = 10;
+
     // Write U and V to disk
     #pragma omp parallel for schedule(static,1) num_threads(nthreads)
-    for(int i=0; i < u_vec->size[1];i++)
+    for(int i=border_x; i < u_vec->size[1]-border_x;i++)
     {
       int tid = i%nthreads;
-      int ret = write(u_files[tid], u[t0][i], u_size);
-      if (ret != u_size) {
-          perror("Cannot open output file");
+      size_t uz_size = (u_vec->size[3]-2*border_z)*sizeof(float);
+      for(int j=border_y; j < u_vec->size[2]-border_y;j++)
+      {
+        int ret = write(u_files[tid], &u[t0][i][j][border_z], uz_size);
+        if (ret != uz_size) {
+          perror("Error writing to file");
           exit(1);
+        }
       }
     }
 
     #pragma omp parallel for schedule(static,1) num_threads(nthreads)
-    for(int i=0; i < v_vec->size[1];i++)
+    for(int i=border_x; i < v_vec->size[1]-border_x;i++)
     {
       int tid = i%nthreads;
-      int ret = write(v_files[tid], v[t0][i], v_size);
-      if (ret != v_size) {
-          perror("Cannot open output file");
+      size_t vz_size = (v_vec->size[3]-2*border_z)*sizeof(float);
+      for(int j=border_y; j < v_vec->size[2]-border_y;j++)
+      {
+        int ret = write(v_files[tid], &v[t0][i][j][border_z], vz_size);
+        if (ret != vz_size) {
+          perror("Error writing to file");
           exit(1);
+        }
       }
     }
 
